@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h2 class="my-4">Welcome, {{ user['name'] }}</h2>
+        <p><strong>Department:</strong> {{ user['department'] }}</p>
+        <p><strong>Coordinates:</strong> {{ user['coordinates'] }}</p>
+        <p><strong>User ID:</strong> {{ user['id'] }}</p>
+        <a href="{{ url_for('recipient_info') }}" class="btn btn-primary">Enter Recipient Info</a>
+    </div>
+</body>
+</html>

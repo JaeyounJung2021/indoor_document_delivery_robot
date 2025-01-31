@@ -23,7 +23,8 @@ class Delivery:
         self.recipient_dept = recipient_dept
         self.recipient_coord = recipient_coord  # (x, y, ori_z, ori_w)
         self.recipient_id = recipient_id
-
+        
+        self.picked_up = False  # 호출지에서 물건을 실었는지 여부를 저장하는 변수
 
 
 
@@ -195,9 +196,18 @@ class DeliveryRobot:
     def perform_action_at_destination(self):
         """목적지에 도달했을 때 수행할 행동을 정의"""
         rospy.loginfo("Performing actions at the destination...")
-        # 예시: 목적지에서 특정 명령어 실행
-        # 여기서는 단순히 2초 대기하는 예시를 추가
-        rospy.sleep(2)
+        
+        for delivery in self.deliveries:
+            #"""목적지(호출자)에 도달했을 때 수행할 행동을 정의"""
+            if self.current_position == delivery.caller_coord and not delivery.picked_up:
+                rospy.loginfo(f"Picked up the package from {delivery.caller_name}.")
+                delivery.picked_up = True
+            ##"""목적지(수령자)에 도달했을 때 수행할 행동을 정의"""
+            elif self.current_position == delivery.recipient_coord and delivery.picked_up:
+                rospy.loginfo(f"Delivered the package to {delivery.recipient_name}.")
+                self.deliveries.remove(delivery)
+        
+        rospy.sleep(2)  # 2초 대기 후 진행
     
     def run(self):
         rospy.spin()

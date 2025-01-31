@@ -4,36 +4,35 @@ import sys
 import os
 import rospy
 from std_msgs.msg import String
-from PyQt4.QtGui import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QPixmap, QSpacerItem, QSizePolicy
+from PyQt4.QtGui import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QPixmap, QSpacerItem, QSizePolicy, QFont
 
 class MyApp(QWidget):
     def __init__(self):
         super(MyApp, self).__init__()
         self.initUI()
         rospy.init_node('gui_node', anonymous=True)
-        self.temp1_pub = rospy.Publisher('pickup', String, queue_size=10)
-        self.temp2_pub = rospy.Publisher('delivery', String, queue_size=10)
+        self.pickup_pub = rospy.Publisher('pickup', String, queue_size=10)
+        self.delivery_pub = rospy.Publisher('delivery', String, queue_size=10)
 
     def initUI(self):
-        # 이미지 경로 설정 (상대 경로로 관리)
+        # Set image path (using relative path)
         image_path = os.path.join(os.path.dirname(__file__), 'static', 'img', 'kawaii.jpg')
         pixmap = QPixmap(image_path)
-
-        # 이미지 크기 조정
+        # Resize image
         pixmap = pixmap.scaled(300, 300, aspectRatioMode=True)
 
-        # QLabel에 이미지 설정
+        # Set image to QLabel
         image_label = QLabel(self)
         image_label.setPixmap(pixmap)
 
-        # 버튼 생성
-        btn1 = QPushButton('물품수령', self)
-        btn1.clicked.connect(self.publish_temp1)
+        # Create buttons
+        btn1 = QPushButton('Pickup', self)
+        btn1.clicked.connect(self.publish_pickup)
         
-        btn2 = QPushButton('물품인도', self)
-        btn2.clicked.connect(self.publish_temp2)
+        btn2 = QPushButton('Delivery', self)
+        btn2.clicked.connect(self.publish_delivery)
 
-        # 레이아웃 설정
+        # Layout setup
         hbox = QHBoxLayout()
         hbox.addWidget(image_label)
         
@@ -41,27 +40,28 @@ class MyApp(QWidget):
         vbox.addWidget(btn1)
         vbox.addWidget(btn2)
 
-        # 레이아웃 간격 추가
+        # Add spacing between layout elements
         vbox.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
         
         hbox.addLayout(vbox)
         self.setLayout(hbox)
 
-        self.setWindowTitle('물품운반로봇 인터페이스')
+        self.setWindowTitle('Cargo Transport Robot Interface')
         self.setGeometry(100, 100, 800, 600)
         self.show()
 
-    def publish_temp1(self):
-        rospy.loginfo('물품수령 버튼 클릭됨')
-        self.temp1_pub.publish('물품수령')
+    def publish_pickup(self):
+        rospy.loginfo('Pickup button clicked')
+        self.pickup_pub.publish('Pickup')
 
-    def publish_temp2(self):
-        rospy.loginfo('물품인도 버튼 클릭됨')
-        self.temp2_pub.publish('물품인도')
+    def publish_delivery(self):
+        rospy.loginfo('Delivery button clicked')
+        self.delivery_pub.publish('Delivery')
 
 if __name__ == '__main__':
     try:
         app = QApplication(sys.argv)
+        app.setFont(QFont("Arial", 12))  # Set font to a common English font
         ex = MyApp()
         sys.exit(app.exec_())
     except Exception as e:

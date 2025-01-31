@@ -1,50 +1,57 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/env python
 import sys
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QFrame, QSpacerItem, QSizePolicy
+import math
+from PyQt4.QtCore import Qt, QTimer
+from PyQt4.QtGui import QApplication, QWidget, QLabel, QVBoxLayout, QFont, QPixmap, QTransform, QPainter, QBrush, QColor
 
 class RobotCallingWindow(QWidget):
     def __init__(self):
         super(RobotCallingWindow, self).__init__()
+        self.rotationAngle = 0  # Initialize rotation angle
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('로봇 호출 중...')
+        self.setWindowTitle('Calling Robot...')
         self.setFixedSize(400, 300)
         self.setStyleSheet('background-color: #f3f3f3;')
-
         layout = QVBoxLayout()
 
         # Title
-        title = QLabel('로봇이 호출되고 있습니다...')
+        title = QLabel('The robot is being called...')
         title.setStyleSheet('color: #007BFF; font-size: 2.5em; margin-bottom: 20px;')
         layout.addWidget(title, alignment=Qt.AlignCenter)
 
         # Subtext
-        subtext = QLabel('잠시만 기다려 주세요.')
+        subtext = QLabel('Please wait a moment.')
         subtext.setStyleSheet('color: #555; font-size: 1.3em; margin-bottom: 40px;')
         layout.addWidget(subtext, alignment=Qt.AlignCenter)
 
-        # Spinner (Circular loading)
-        spinner = QFrame(self)
-        spinner.setStyleSheet('''
-            border: 6px solid rgba(0, 0, 0, 0.1);
-            border-top: 6px solid #007BFF;
-            border-radius: 50%;
-            width: 70px;
-            height: 70px;
-            margin-bottom: 20px;
-        ''')
-        layout.addWidget(spinner, alignment=Qt.AlignCenter)
+        # Spinner (Loading Animation)
+        self.spinner = QLabel(self)
+        self.original_pixmap = QPixmap(70, 70)  # Create an empty pixmap
+        self.original_pixmap.fill(Qt.transparent)  # Create a transparent image
 
-        # Animation of Spinner
+        # Draw circular loading spinner
+        painter = QPainter(self.original_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        brush = QBrush(QColor("#007BFF"))
+        painter.setBrush(brush)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(10, 10, 50, 50)  # Draw a circle
+        painter.end()
+
+        self.spinner.setPixmap(self.original_pixmap)
+        self.spinner.setFixedSize(70, 70)
+        layout.addWidget(self.spinner, alignment=Qt.AlignCenter)
+
+        # Animation Timer
         self.animation = QTimer(self)
         self.animation.timeout.connect(self.rotateSpinner)
         self.animation.start(16)
 
         # Status Text
-        status_text = QLabel('로봇이 사용자 위치로 이동 중입니다.')
+        status_text = QLabel('The robot is moving to your location.')
         status_text.setStyleSheet('color: #333; font-size: 1em;')
         layout.addWidget(status_text, alignment=Qt.AlignCenter)
 
@@ -52,16 +59,18 @@ class RobotCallingWindow(QWidget):
         self.setLayout(layout)
 
     def rotateSpinner(self):
-        angle = (self.rotationAngle + 6) % 360  # Incrementing the rotation angle
-        self.rotationAngle = angle
-        self.spinner.setStyleSheet(f'border: 6px solid rgba(0, 0, 0, 0.1);'
-                                   f'border-top: 6px solid #007BFF;'
-                                   f'border-radius: 50%;'
-                                   f'width: 70px; height: 70px; margin-bottom: 20px;'
-                                   f'transform: rotate({angle}deg);')
+        self.rotationAngle = (self.rotationAngle + 6) % 360  # Increment angle
+        transform = QTransform()
+        transform.rotate(self.rotationAngle)
+
+        rotated_pixmap = self.original_pixmap.transformed(transform, Qt.SmoothTransformation)
+        self.spinner.setPixmap(rotated_pixmap)
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setFont(QFont("Arial", 12))
     ex = RobotCallingWindow()
     ex.show()
     sys.exit(app.exec_())
+

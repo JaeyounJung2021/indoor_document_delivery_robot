@@ -48,6 +48,7 @@ class DeliveryRobot:
         rospy.loginfo("Delivery robot initialized and waiting for calls.")
         self.goal_status = None  # 목표 상태를 추적하기 위한 변수
         self.event = threading.Event()  # 이벤트 객체 추가: 행동 완료를 기다리기 위한 신호
+        self.route_thread_flag = False  # 서브스레드를 종료할지 여부를 나타내는 플래그
 
     def amcl_pose_callback(self, msg):
         """AMCL로부터 로봇의 현재 위치를 업데이트하는 콜백"""
@@ -88,8 +89,14 @@ class DeliveryRobot:
 
             # delivery 객체 새로 생성될 때 마다 그 자리에서 경로 재계산
             self.recalculate_route()
+
+            # 경로 이동 중일 때만 서브스레드 종료 플래그 설정
+            if self.executing_route:
+                self.route_thread_flag = True  # 새로운 요청이 오면 플래그를 True로 설정
+
         else:
             rospy.logwarn("⚠️ Maximum deliveries reached. Cannot accept new request.")
+            
 
     def recalculate_route(self):
         """현재 위치에서 최적의 배송 순서를 결정"""
@@ -98,7 +105,10 @@ class DeliveryRobot:
         
         waypoints = []
         for delivery in self.deliveries:
-            waypoints.append((delivery.caller_coord, "caller", delivery))
+            # 호출자에게 물건을 실었으면 경로에서 제외
+            if not delivery.picked_up:
+                waypoints.append((delivery.caller_coord, "caller", delivery))
+            # 수령자는 항상 경로에 포함
             waypoints.append((delivery.recipient_coord, "recipient", delivery))
         
         # 일단 min_distance를 매우 크게 초기화
@@ -130,9 +140,16 @@ class DeliveryRobot:
         """호출지를 먼저 방문하는 순서인지 확인"""
         visited = set()
         for coord, point_type, delivery in route:
-            if point_type == "recipient" and delivery not in visited:
-                return False
-            visited.add(delivery)
+            # 만약 호출자가 이미 물건을 실었다면 수령자는 경로에 포함되어야 한다
+            if point_type == "recipient" and delivery.picked_up:
+                if delivery not in visited:
+                    visited.add(delivery)  # 수령자는 방문할 수 있음
+            elif point_type == "caller" and delivery.picked_up:
+                continue  # 이미 물건을 실었으므로 호출자는 경로에 포함하지 않음
+            elif point_type == "caller" and delivery not in visited:
+                visited.add(delivery)  # 호출자는 아직 물건을 실지 않아서 경로에 포함
+            elif point_type == "recipient" and delivery not in visited:
+                return False  # 수령자는 반드시 이전에 해당 호출자가 방문해야 함
         return True
     
     def calculate_route_distance(self, route):
@@ -157,6 +174,13 @@ class DeliveryRobot:
         """계산된 최적 경로를 따라 real 이동"""
         self.executing_route = True
         for coord, point_type, delivery in route:
+            # 서브스레드가 종료 요청을 받았으면 즉시 종료
+            if self.route_thread_flag:
+                rospy.loginfo("New delivery request received, stopping current route.")
+                self.executing_route = False
+                self.route_thread_flag = False  # 플래그 초기화
+                break  # 서브스레드 종료
+
             rospy.loginfo(f"Moving to {point_type} location: {coord}")
             self.move_command(*coord)
             
@@ -164,7 +188,8 @@ class DeliveryRobot:
             self.event.clear()  # 이전 이벤트 초기화
             self.event.wait()   # 이벤트 신호 대기
             
-            rospy.sleep(2)  # 잠시 대기 후 다음 목표로 이동
+            # 멀티스레드라 메인스레드가 서브스레드 죽일 시간이 필요함. 메인스레드가 서브스레드 죽이는 코드 실행하기까지 시간 생각해서 
+            rospy.sleep(3)  # 넉넉히 3초 대기
         
         rospy.loginfo("All deliveries completed. Resetting system...")
         self.deliveries.clear()
@@ -183,6 +208,7 @@ class DeliveryRobot:
         rospy.loginfo(f"Moving to ({pos_x}, {pos_y}, {ori_z}, {ori_w})...")
 
     def callback(self, status):
+        #status.list가 존재하고, 최근 status가 3(goal에 정상 도착한 상태)일때
         if status.status_list and status.status_list[-1].status == 3:
             rospy.loginfo("Robot has reached the destination.")
             
@@ -202,11 +228,12 @@ class DeliveryRobot:
             if self.current_position == delivery.caller_coord and not delivery.picked_up:
                 rospy.loginfo(f"Picked up the package from {delivery.caller_name}.")
                 delivery.picked_up = True
+                #ESP8266과 통신해서 ESP8266이 자기 할일 다했다하는거 알려주면 그때 다음 코드 동작하도록 하는 코드 추가 필요함
             ##"""목적지(수령자)에 도달했을 때 수행할 행동을 정의"""
             elif self.current_position == delivery.recipient_coord and delivery.picked_up:
                 rospy.loginfo(f"Delivered the package to {delivery.recipient_name}.")
                 self.deliveries.remove(delivery)
-        
+                #ESP8266과 통신해서 ESP8266이 자기 할일 다했다하는거 알려주면 그때 다음 코드 동작하도록 하는 코드 추가 필요함
         rospy.sleep(2)  # 2초 대기 후 진행
     
     def run(self):

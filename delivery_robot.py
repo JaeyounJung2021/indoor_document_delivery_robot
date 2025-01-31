@@ -1,13 +1,14 @@
-#!/usr/bin/env python3
 import rospy
-import os
-import time
-import webbrowser
+import threading
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from std_msgs.msg import String
 from actionlib_msgs.msg import GoalStatusArray
-from itertools import permutations
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+import actionlib
 import math
+from itertools import permutations
+
+
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
@@ -23,6 +24,9 @@ class Delivery:
         self.recipient_coord = recipient_coord  # (x, y, ori_z, ori_w)
         self.recipient_id = recipient_id
 
+
+
+
 class DeliveryRobot:
 
     def __init__(self):
@@ -35,11 +39,17 @@ class DeliveryRobot:
         self.deliveries = []  # 최대 2개까지 관리
         self.current_goal = PoseStamped()
         self.current_position = (0, 0)  # 로봇의 실제 위치 초기화
+        self.executing_route = False  # 경로 이동 중 여부 플래그
+        self.move_base_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)  # 
+        rospy.loginfo("Waiting for Action Server")
+        self.move_base_client.wait_for_server()
+        rospy.loginfo("Action Server Is Ready")
         rospy.loginfo("Delivery robot initialized and waiting for calls.")
-    
+        self.goal_status = None  # 목표 상태를 추적하기 위한 변수
+        self.event = threading.Event()  # 이벤트 객체 추가: 행동 완료를 기다리기 위한 신호
+
     def amcl_pose_callback(self, msg):
         """AMCL로부터 로봇의 현재 위치를 업데이트하는 콜백"""
-        # AMCL에서 받는 위치 정보는 PoseWithCovarianceStamped 객체로, 위치와 회전 정보를 포함함
         position = msg.pose.pose.position
         orientation = msg.pose.pose.orientation
         self.current_position = (position.x, position.y, orientation.z, orientation.w)
@@ -63,7 +73,7 @@ class DeliveryRobot:
                                     recipient_name, recipient_dept, recipient_coord, recipient_id)
             self.deliveries.append(new_delivery)
             rospy.loginfo(f"✅ New delivery added: {caller_name} → {recipient_name}")
-            
+
             # Delivery 객체의 모든 정보 출력
             rospy.loginfo("Delivery details:")
             rospy.loginfo(f"Caller Name: {new_delivery.caller_name}")
@@ -107,8 +117,13 @@ class DeliveryRobot:
                 best_route = perm
         
         rospy.loginfo("Optimal route recalculated.")
-        # """계산된 최적 경로를 따라 real 이동"""
-        self.execute_route(best_route)
+        # 기존 이동을 중단하고 새 경로로 이동
+        if self.executing_route:
+            rospy.loginfo("Current route is being canceled.")
+            self.move_base_client.cancel_all_goals()  # 이동 중인 목표 취소
+        
+        # 새 경로로 이동
+        self.execute_route_in_thread(best_route)
     
     def valid_sequence(self, route):
         """호출지를 먼저 방문하는 순서인지 확인"""
@@ -132,34 +147,57 @@ class DeliveryRobot:
         # 계산된 총 이동 거리 반환
         return total_distance
     
+    def execute_route_in_thread(self, route):
+        """계산된 최적 경로를 별도의 스레드에서 이동"""
+        route_thread = threading.Thread(target=self.execute_route, args=(route,))
+        route_thread.start()
+    
     def execute_route(self, route):
         """계산된 최적 경로를 따라 real 이동"""
+        self.executing_route = True
         for coord, point_type, delivery in route:
             rospy.loginfo(f"Moving to {point_type} location: {coord}")
             self.move_command(*coord)
-            rospy.sleep(5)
+            
+            # 목표 도달을 확인할 때까지 기다림
+            self.event.clear()  # 이전 이벤트 초기화
+            self.event.wait()   # 이벤트 신호 대기
+            
+            rospy.sleep(2)  # 잠시 대기 후 다음 목표로 이동
         
         rospy.loginfo("All deliveries completed. Resetting system...")
         self.deliveries.clear()
+        self.executing_route = False
 
     def move_command(self, pos_x, pos_y, ori_z=0.0, ori_w=1.0):
-        goal = PoseStamped()
-        goal.header.stamp = rospy.Time.now()
-        goal.header.frame_id = 'map'
-        goal.pose.position.x = pos_x
-        goal.pose.position.y = pos_y
-        goal.pose.orientation.z = ori_z
-        goal.pose.orientation.w = ori_w
+        goal = MoveBaseGoal()
+        goal.target_pose.header.stamp = rospy.Time.now()
+        goal.target_pose.header.frame_id = 'map'
+        goal.target_pose.pose.position.x = pos_x
+        goal.target_pose.pose.position.y = pos_y
+        goal.target_pose.pose.orientation.z = ori_z
+        goal.target_pose.pose.orientation.w = ori_w
         
-        self.pub_goal.publish(goal)
-        self.current_goal = goal
+        self.move_base_client.send_goal(goal)
         rospy.loginfo(f"Moving to ({pos_x}, {pos_y}, {ori_z}, {ori_w})...")
-    
+
     def callback(self, status):
         if status.status_list and status.status_list[-1].status == 3:
             rospy.loginfo("Robot has reached the destination.")
-            webbrowser.open('http://localhost:5000/')
+            
+            # 로봇이 도달했을 때 수행할 행동 정의
+            self.perform_action_at_destination()
+            
+            # 행동이 끝났음을 알리기 위해 이벤트 신호 전송
+            self.event.set()  # 이벤트 신호 설정 (완료된 상태)
             self.esp_command_pub.publish("Arrival")
+    
+    def perform_action_at_destination(self):
+        """목적지에 도달했을 때 수행할 행동을 정의"""
+        rospy.loginfo("Performing actions at the destination...")
+        # 예시: 목적지에서 특정 명령어 실행
+        # 여기서는 단순히 2초 대기하는 예시를 추가
+        rospy.sleep(2)
     
     def run(self):
         rospy.spin()

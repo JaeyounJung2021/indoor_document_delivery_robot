@@ -196,6 +196,7 @@ class DeliveryRobot:
         """목적지에 도달했을 때 수행할 행동을 정의"""
         rospy.loginfo("Performing actions at the destination...")
         # 예시: 목적지에서 특정 명령어 실행
+        
         # 여기서는 단순히 2초 대기하는 예시를 추가
         rospy.sleep(2)
     

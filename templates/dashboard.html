@@ -15,9 +15,7 @@
         <button class="btn btn-primary btn-block robot-button" onclick="openModal()">🚀 로봇 호출</button>
 
         <!-- 로봇 위치 조회 버튼 -->
-        <form action="/track_robot" method="POST">
-            <button type="submit" class="btn btn-primary btn-block robot-button">🔍 로봇 위치 조회 </button>
-        </form>
+        <button class="btn btn-primary btn-block robot-button" onclick="openLocationModal()">🔍 로봇 위치 조회 </button>
     </div>
 
     <!-- 🚀 로봇 호출 시 뜨는 팝업 (모달) -->
@@ -36,6 +34,18 @@
                 </div>
                 <button type="submit" class="btn btn-success btn-block">확인</button>
             </form>
+        </div>
+    </div>
+
+    <!-- 로봇 위치 조회 팝업 -->
+    <div id="locationModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLocationModal()">&times;</span>
+            <h3>🤖로봇은 배달 중!✨</h3>
+
+            <!-- 캔버스 추가 (경로를 그리기 위한 영역) -->
+            <canvas id="robotCanvas" width="500" height="500" style="border: 1px solid #000;"></canvas>
+
         </div>
     </div>
 

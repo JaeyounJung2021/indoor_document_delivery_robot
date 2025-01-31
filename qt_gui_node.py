@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/env python
+
 '''토픽값에 따라 QT를 제어하는 코드'''
 import rospy
 import subprocess  # 외부(여기서는 QT) 프로그램을 실행하고, 출력 및 에러를 처리.

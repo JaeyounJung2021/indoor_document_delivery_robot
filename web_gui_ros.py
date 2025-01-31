@@ -17,6 +17,9 @@ from flask_socketio import SocketIO, emit
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
+
+
+
 # 글로벌 변수로 배달 객체 관리
 active_deliveries = deque(maxlen=2)  # 최대 2개의 배달만 처리
 
@@ -165,7 +168,7 @@ def recipient_info():
 
         # ROS 토픽으로 수령자 정보 발행
         rospy.Publisher("/call_request", String, queue_size=10).publish(delivery_info)
-
+        rospy.loginfo("sent message to /call_request Topic")
         return redirect(url_for('dashboard'))
     
     return render_template('recipient_info.html')

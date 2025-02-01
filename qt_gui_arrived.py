@@ -4,8 +4,9 @@ import sys
 import os
 import rospy
 from std_msgs.msg import String
-from PyQt4.QtGui import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QPixmap, QSpacerItem, QSizePolicy, QFont
-from PyQt4.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy
+from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtCore import Qt
 
 class MyApp(QWidget):
     def __init__(self):
@@ -48,7 +49,7 @@ class MyApp(QWidget):
         image_path = os.path.join(os.path.dirname(__file__), 'static', 'img', 'kawaii.jpg')
         pixmap = QPixmap(image_path)
         # Resize image, 300 x 300
-        pixmap = pixmap.scaled(300, 300, aspectRatioMode=Qt.KeepAspectRatio) 
+        pixmap = pixmap.scaled(300, 300, aspectRatioMode=Qt.KeepAspectRatio)
 
         # Set image to QLabel
         image_label = QLabel(self)
@@ -65,7 +66,7 @@ class MyApp(QWidget):
         hbox = QHBoxLayout()
         hbox.addWidget(image_label)
         
-        #Layout setup, QVBoxLayout은 위 -> 아래 레이블 배치.
+        # Layout setup, QVBoxLayout은 위 -> 아래 레이블 배치.
         vbox = QVBoxLayout()
         vbox.addWidget(btn1)
         vbox.addWidget(btn2)

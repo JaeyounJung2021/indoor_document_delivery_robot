@@ -2,8 +2,9 @@
 #!/usr/bin/env python
 import sys
 import math
-from PyQt4.QtCore import Qt, QTimer
-from PyQt4.QtGui import QApplication, QWidget, QLabel, QVBoxLayout, QFont, QPixmap, QTransform, QPainter, QBrush, QColor
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor, QFont, QTransform
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
 
 class RobotCallingWindow(QWidget):
     def __init__(self):

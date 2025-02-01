@@ -4,7 +4,7 @@
 '''토픽값에 따라 QT를 제어하는 코드'''
 import rospy
 import subprocess  # 외부(여기서는 QT) 프로그램을 실행하고, 출력 및 에러를 처리.
-from actionlib_msgs.msg import GoalStatusArray
+from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 
 # Qt GUI 실행 여부를 추적하는 변수
 gui_process1 = None
@@ -17,14 +17,14 @@ def moving_status_callback(msg):
         if status == 1:  # /move_base/status == 1 이면 이동중
             if gui_process1 is None:
                 rospy.loginfo("로봇 이동중일때의 qt GUI 실행")
-                gui_process1 = subprocess.Popen(["python", "qt_gui_moving.py"])  # Qt GUI 실행, popen은 비동기적으로 실행됨.
+                gui_process1 = subprocess.Popen(["python3", "qt_gui_moving.py"])  # PyQt5는 python3으로 실행
                 if gui_process2:  # gui_process2가 실행 중이라면 종료
                     gui_process2.terminate()
                     gui_process2 = None
         elif status == 3:  # /move_base/status == 3 이면 목적지 도착
             if gui_process2 is None:
                 rospy.loginfo("로봇 목적지 도착상태일때의 qt GUI 실행")
-                gui_process2 = subprocess.Popen(["python", "qt_gui_arrived.py"])
+                gui_process2 = subprocess.Popen(["python3", "qt_gui_arrived.py"])
                 if gui_process1:  # gui_process1이 실행 중이라면 종료
                     gui_process1.terminate()
                     gui_process1 = None

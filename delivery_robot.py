@@ -7,195 +7,223 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import actionlib
 import math
 from itertools import permutations
-
-
+from typing import List, Tuple, Optional
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
-    def __init__(self, caller_name, caller_dept, caller_coord, caller_id,
-                 recipient_name, recipient_dept, recipient_coord, recipient_id):
+    def __init__(self, caller_name: str, caller_dept: str, 
+                 caller_coord: Tuple[float, float, float, float], caller_id: str,
+                 recipient_name: str, recipient_dept: str, 
+                 recipient_coord: Tuple[float, float, float, float], recipient_id: str):
         self.caller_name = caller_name
         self.caller_dept = caller_dept
-        self.caller_coord = caller_coord  # (x, y, ori_z, ori_w)
+        self.caller_coord = caller_coord
         self.caller_id = caller_id
-
         self.recipient_name = recipient_name
         self.recipient_dept = recipient_dept
-        self.recipient_coord = recipient_coord  # (x, y, ori_z, ori_w)
+        self.recipient_coord = recipient_coord
         self.recipient_id = recipient_id
+        self.picked_up = False
         
-        self.picked_up = False  # 호출지에서 물건을 실었는지 여부를 저장하는 변수
-
-
+    def __str__(self) -> str:
+        return f"배송 요청: {self.caller_name}님 → {self.recipient_name}님"
 
 class DeliveryRobot:
-
     def __init__(self):
         rospy.init_node("delivery_robot", anonymous=True)
-        self.pub_goal = rospy.Publisher("/move_base_simple_goal", PoseStamped, queue_size=10)
-        self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
-        self.call_sub = rospy.Subscriber("/call_request", String, self.call_request_callback)
-        self.status_sub = rospy.Subscriber("/move_base/status", GoalStatusArray, self.callback)
-        self.amcl_pose_sub = rospy.Subscriber("/amcl_pose", PoseWithCovarianceStamped, self.amcl_pose_callback)  # AMCL 위치 구독
-        self.deliveries = []  # 최대 2개까지 관리
+        
+        # 퍼블리셔 초기화
+        self._init_publishers()
+        
+        # 서브스크라이버 초기화
+        self._init_subscribers()
+        
+        # 상태 관리 변수들
+        self.deliveries: List[Delivery] = []
         self.current_goal = PoseStamped()
-        self.current_position = (0, 0)  # 로봇의 실제 위치 초기화
-        self.executing_route = False  # 경로 이동 중 여부 플래그
-        self.move_base_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)  # 
-        rospy.loginfo("Waiting for Action Server")
-        self.move_base_client.wait_for_server()
-        rospy.loginfo("Action Server Is Ready")
-        rospy.loginfo("Delivery robot initialized and waiting for calls.")
-        self.goal_status = None  # 목표 상태를 추적하기 위한 변수
-        self.event = threading.Event()  # 이벤트 객체 추가: 행동 완료를 기다리기 위한 신호
-        self.route_thread_flag = False  # 서브스레드를 종료할지 여부를 나타내는 플래그
+        self.current_position: Tuple[float, float, float, float] = (0, 0, 0, 0)
+        self.executing_route = False
+        self.route_thread_flag = False
+        self.event = threading.Event()
+        
+        # 액션 클라이언트 설정
+        self._setup_action_client()
+        rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
 
-    def amcl_pose_callback(self, msg):
-        """AMCL로부터 로봇의 현재 위치를 업데이트하는 콜백"""
+    def _init_publishers(self):
+        """퍼블리셔 초기화 메서드"""
+        try:
+            self.pub_goal = rospy.Publisher("/move_base_simple_goal", PoseStamped, queue_size=10)
+            self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
+        except Exception as e:
+            rospy.logerr(f"퍼블리셔 초기화 실패: {e}")
+            raise
+
+    def _init_subscribers(self):
+        """서브스크라이버 초기화 메서드"""
+        try:
+            self.call_sub = rospy.Subscriber("/call_request", String, 
+                                           self.call_request_callback)
+            self.status_sub = rospy.Subscriber("/move_base/status", GoalStatusArray, 
+                                             self.status_callback)
+            self.amcl_pose_sub = rospy.Subscriber("/amcl_pose", 
+                                                 PoseWithCovarianceStamped, 
+                                                 self.amcl_pose_callback)
+            self.is_interacting_sub = rospy.Subscriber("/is_interacting_with_human", 
+                                                     String, 
+                                                     self.is_interacting_with_human_callback)
+        except Exception as e:
+            rospy.logerr(f"서브스크라이버 초기화 실패: {e}")
+            raise
+
+    def _setup_action_client(self):
+        """move_base 액션 클라이언트 초기화"""
+        self.move_base_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)
+        if not self.move_base_client.wait_for_server(rospy.Duration(30.0)):
+            rospy.logerr("이동 베이스 액션 서버를 사용할 수 없습니다!")
+            raise RuntimeError("액션 서버 연결 실패!")
+        rospy.loginfo("액션 서버가 준비되었습니다.")
+
+    def amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        """AMCL로부터 로봇의 현재 위치를 업데이트"""
         position = msg.pose.pose.position
         orientation = msg.pose.pose.orientation
         self.current_position = (position.x, position.y, orientation.z, orientation.w)
-        rospy.loginfo(f"Updated current position: {self.current_position}")
+        rospy.logdebug(f"현재 위치가 업데이트되었습니다: {self.current_position}")
 
-    def call_request_callback(self, msg):
-        rospy.loginfo("call_request_callback is called")
-        data = msg.data.split(",")  
-        if len(data) != 14:
-            rospy.logwarn("Invalid delivery info format. Expected 14 values.")
-            return
-        
-        caller_name, caller_dept, caller_x, caller_y, caller_ori_z, caller_ori_w, caller_id, \
-        recipient_name, recipient_dept, recipient_x, recipient_y, recipient_ori_z, recipient_ori_w, recipient_id = data
+    def call_request_callback(self, msg: String) -> None:
+        """새로운 배송 요청 처리"""
+        try:
+            data = msg.data.split(",")
+            if len(data) != 14:
+                rospy.logerr(f"잘못된 배송 정보 형식입니다. {len(data)}개 값이 전달됨, 14개 필요")
+                return
 
-        caller_coord = (float(caller_x), float(caller_y), float(caller_ori_z), float(caller_ori_w))
-        recipient_coord = (float(recipient_x), float(recipient_y), float(recipient_ori_z), float(recipient_ori_w))
+            try:
+                caller_coord = tuple(map(float, data[2:6]))
+                recipient_coord = tuple(map(float, data[9:13]))
+            except ValueError as e:
+                rospy.logerr(f"좌표 파싱 실패: {e}")
+                return
 
-        if len(self.deliveries) < 2:
-            new_delivery = Delivery(caller_name, caller_dept, caller_coord, caller_id,
-                                    recipient_name, recipient_dept, recipient_coord, recipient_id)
-            self.deliveries.append(new_delivery)
-            rospy.loginfo(f"✅ New delivery added: {caller_name} → {recipient_name}")
+            if len(self.deliveries) < 2:
+                new_delivery = Delivery(
+                    data[0], data[1], caller_coord, data[6],
+                    data[7], data[8], recipient_coord, data[13]
+                )
+                self.deliveries.append(new_delivery)
+                rospy.loginfo(f"새로운 배송이 추가되었습니다: {new_delivery}")
+                
+                # 경로 재계산
+                self.recalculate_route()
+            else:
+                rospy.logwarn("최대 배송 수(2개)에 도달했습니다. 요청이 거부되었습니다.")
 
-            # Delivery 객체의 모든 정보 출력
-            rospy.loginfo("Delivery details:")
-            rospy.loginfo(f"Caller Name: {new_delivery.caller_name}")
-            rospy.loginfo(f"Caller Department: {new_delivery.caller_dept}")
-            rospy.loginfo(f"Caller Coordinates: {new_delivery.caller_coord}")
-            rospy.loginfo(f"Caller ID: {new_delivery.caller_id}")
-            rospy.loginfo(f"Recipient Name: {new_delivery.recipient_name}")
-            rospy.loginfo(f"Recipient Department: {new_delivery.recipient_dept}")
-            rospy.loginfo(f"Recipient Coordinates: {new_delivery.recipient_coord}")
-            rospy.loginfo(f"Recipient ID: {new_delivery.recipient_id}")
-
-            # delivery 객체 새로 생성될 때 마다 그 자리에서 경로 재계산
-            self.recalculate_route()
-
-            # 경로 이동 중일 때만 서브스레드 종료 플래그 설정
-            if self.executing_route:
-                self.route_thread_flag = True  # 새로운 요청이 오면 플래그를 True로 설정
-
-        else:
-            rospy.logwarn("⚠️ Maximum deliveries reached. Cannot accept new request.")
-            
+        except Exception as e:
+            rospy.logerr(f"배송 요청 처리 중 오류 발생: {e}")
 
     def recalculate_route(self):
-        """현재 위치에서 최적의 배송 순서를 결정"""
+        """현재 위치에서 최적의 배송 순서를 결정하는 메서드"""
         if not self.deliveries:
+            rospy.loginfo("처리할 배송 요청이 없습니다.")
             return
         
         waypoints = []
         for delivery in self.deliveries:
-            # 호출자에게 물건을 실었으면 경로에서 제외
             if not delivery.picked_up:
-                waypoints.append((delivery.caller_coord, "caller", delivery))
-            # 수령자는 항상 경로에 포함
-            waypoints.append((delivery.recipient_coord, "recipient", delivery))
+                waypoints.append((delivery.caller_coord, "호출자", delivery))
+            waypoints.append((delivery.recipient_coord, "수령자", delivery))
         
-        # 일단 min_distance를 매우 크게 초기화
         min_distance = float('inf')
         best_route = []
 
-        # waypoint 리스트를 기반으로 가능한 모든 순열(경우의 수) 생성
         for perm in permutations(waypoints):
-            # 각 배달건에 대해 수령자보다 호출자에게 먼저 도달하는 경우의 수만 살리고 나머지 전부 continue 해서 건너뛰기
-            if not self.valid_sequence(perm):
+            if not self._is_valid_sequence(perm):
                 continue
-            # """주어진 경로의 총 이동 거리 계산"""
-            distance = self.calculate_route_distance(perm)
-            # min_distance 보다 작으면 best_route에 대입 
-            if distance < min_distance:
-                min_distance = distance
+                
+            total_distance = self._calculate_route_distance(perm)
+            if total_distance < min_distance:
+                min_distance = total_distance
                 best_route = perm
         
-        rospy.loginfo("Optimal route recalculated.")
-        # 기존 이동을 중단하고 새 경로로 이동
+        rospy.loginfo(f"최적 경로가 계산되었습니다. 총 거리: {min_distance:.2f}m")
+        
         if self.executing_route:
-            rospy.loginfo("Current route is being canceled.")
-            self.move_base_client.cancel_all_goals()  # 이동 중인 목표 취소
+            rospy.loginfo("현재 경로를 취소하고 새로운 경로로 변경합니다.")
+            self.move_base_client.cancel_all_goals()
+            self.route_thread_flag = True
         
-        # 새 경로로 이동
         self.execute_route_in_thread(best_route)
-    
-    def valid_sequence(self, route):
-        """호출지를 먼저 방문하는 순서인지 확인"""
-        visited = set()
-        for coord, point_type, delivery in route:
-            # 만약 호출자가 이미 물건을 실었다면 수령자는 경로에 포함되어야 한다
-            if point_type == "recipient" and delivery.picked_up:
-                if delivery not in visited:
-                    visited.add(delivery)  # 수령자는 방문할 수 있음
-            elif point_type == "caller" and delivery.picked_up:
-                continue  # 이미 물건을 실었으므로 호출자는 경로에 포함하지 않음
-            elif point_type == "caller" and delivery not in visited:
-                visited.add(delivery)  # 호출자는 아직 물건을 실지 않아서 경로에 포함
-            elif point_type == "recipient" and delivery not in visited:
-                return False  # 수령자는 반드시 이전에 해당 호출자가 방문해야 함
-        return True
-    
-    def calculate_route_distance(self, route):
-        """주어진 경로의 총 이동 거리 계산"""
-        total_distance = 0
-        current_position = self.current_position  # 로봇의 실제 위치 사용
+
+    def _is_valid_sequence(self, route) -> bool:
+        """경로의 유효성을 검증"""
+        visited_deliveries = set()
         
-        for coord, _, _ in route:
-            # 현재 위치의 x, y 좌표와 route에 담긴 호출자/수령자 좌표의 x, y 좌표 비교해서 유클리드 거리 계산해서 total_distance에 누적
-            total_distance += math.dist(current_position[:2], coord[:2])
-            # 다음 계산을 위해 current_position을 업데이트
-            current_position = coord
-        # 계산된 총 이동 거리 반환
+        for coord, point_type, delivery in route:
+            if point_type == "수령자":
+                if delivery.picked_up:
+                    if delivery not in visited_deliveries:
+                        visited_deliveries.add(delivery)
+                elif delivery not in visited_deliveries:
+                    return False
+            elif point_type == "호출자":
+                if not delivery.picked_up and delivery not in visited_deliveries:
+                    visited_deliveries.add(delivery)
+                    
+        return True
+
+    def _calculate_route_distance(self, route) -> float:
+        """주어진 경로의 총 이동 거리를 계산"""
+        total_distance = 0.0
+        current_pos = self.current_position
+        
+        for next_point, _, _ in route:
+            distance = math.sqrt(
+                (current_pos[0] - next_point[0]) ** 2 + 
+                (current_pos[1] - next_point[1]) ** 2
+            )
+            total_distance += distance
+            current_pos = next_point
+            
         return total_distance
-    
+
     def execute_route_in_thread(self, route):
-        """계산된 최적 경로를 별도의 스레드에서 이동"""
+        """최적화된 경로를 별도의 스레드에서 실행"""
+        if not route:
+            rospy.logwarn("실행할 경로가 없습니다.")
+            return
+            
         route_thread = threading.Thread(target=self.execute_route, args=(route,))
         route_thread.start()
-    
-    def execute_route(self, route):
-        """계산된 최적 경로를 따라 real 이동"""
+        rospy.loginfo("경로 실행 스레드가 시작되었습니다.")
+
+    def execute_route(self, route: List[Tuple]) -> None:
+        """배송 경로 실행"""
         self.executing_route = True
-        for coord, point_type, delivery in route:
-            # 서브스레드가 종료 요청을 받았으면 즉시 종료
-            if self.route_thread_flag:
-                rospy.loginfo("New delivery request received, stopping current route.")
-                self.executing_route = False
-                self.route_thread_flag = False  # 플래그 초기화
-                break  # 서브스레드 종료
+        try:
+            for coord, point_type, delivery in route:
+                if self.route_thread_flag:
+                    rospy.loginfo("새로운 배송 요청으로 인해 현재 경로가 취소되었습니다")
+                    break
 
-            rospy.loginfo(f"Moving to {point_type} location: {coord}")
-            self.move_command(*coord)
-            
-            # 목표 도달을 확인할 때까지 기다림
-            self.event.clear()  # 이전 이벤트 초기화
-            self.event.wait()   # 이벤트 신호 대기
-            
-            # 멀티스레드라 메인스레드가 서브스레드 죽일 시간이 필요함. 메인스레드가 서브스레드 죽이는 코드 실행하기까지 시간 생각해서 
-            rospy.sleep(3)  # 넉넉히 3초 대기
-        
-        rospy.loginfo("All deliveries completed. Resetting system...")
-        self.deliveries.clear()
-        self.executing_route = False
+                rospy.loginfo(f"{point_type} 위치로 이동 중: {coord}")
+                self.move_command(*coord)
+                
+                self.event.clear()
+                if not self.event.wait(timeout=300.0):
+                    rospy.logerr("목적지 도착 대기 시간 초과")
+                    continue
+                
+                rospy.sleep(3)
+                
+        except Exception as e:
+            rospy.logerr(f"경로 실행 중 오류 발생: {e}")
+        finally:
+            self.executing_route = False
+            self.route_thread_flag = False
 
-    def move_command(self, pos_x, pos_y, ori_z=0.0, ori_w=1.0):
+    def move_command(self, pos_x: float, pos_y: float, ori_z: float = 0.0, ori_w: float = 1.0):
+        """로봇 이동 명령 전송"""
         goal = MoveBaseGoal()
         goal.target_pose.header.stamp = rospy.Time.now()
         goal.target_pose.header.frame_id = 'map'
@@ -205,40 +233,58 @@ class DeliveryRobot:
         goal.target_pose.pose.orientation.w = ori_w
         
         self.move_base_client.send_goal(goal)
-        rospy.loginfo(f"Moving to ({pos_x}, {pos_y}, {ori_z}, {ori_w})...")
+        rospy.loginfo(f"이동 목표가 설정되었습니다: ({pos_x}, {pos_y})")
 
-    def callback(self, status):
-        #status.list가 존재하고, 최근 status가 3(goal에 정상 도착한 상태)일때
-        if status.status_list and status.status_list[-1].status == 3:
-            rospy.loginfo("Robot has reached the destination.")
+    def status_callback(self, status: GoalStatusArray) -> None:
+        """이동 상태 업데이트 처리"""
+        if not status.status_list:
+            return
             
-            # 로봇이 도달했을 때 수행할 행동 정의
+        latest_status = status.status_list[-1].status
+        if latest_status == 3:  # 성공
+            rospy.loginfo("목표 지점에 도달했습니다")
             self.perform_action_at_destination()
-            
-            # 행동이 끝났음을 알리기 위해 이벤트 신호 전송
-            self.event.set()  # 이벤트 신호 설정 (완료된 상태)
-            self.esp_command_pub.publish("Arrival")
-    
+        elif latest_status == 4:  # 실패
+            rospy.logwarn("목표 도달 실패 - 재시도 중")
+            self._handle_goal_aborted()
+
+    def _handle_goal_aborted(self) -> None:
+        """실패한 네비게이션 처리"""
+        retry_count = getattr(self, '_retry_count', 0)
+        if retry_count < 3:
+            self._retry_count = retry_count + 1
+            rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/3)")
+            self.move_command(*self.current_goal.pose.position)
+        else:
+            rospy.logerr("3회 시도 후 네비게이션 실패")
+            self._retry_count = 0
+            self.event.set()
+
+    def is_interacting_with_human_callback(self, msg: String) -> None:
+        """사용자 상호작용 완료 처리"""
+        if msg.data == "done":
+            rospy.loginfo("사용자와의 상호작용이 완료되었습니다.")
+            self.perform_action_at_destination()
+            self.event.set()
+
     def perform_action_at_destination(self):
-        """목적지에 도달했을 때 수행할 행동을 정의"""
-        rospy.loginfo("Performing actions at the destination...")
-        
-        for delivery in self.deliveries:
-            #"""목적지(호출자)에 도달했을 때 수행할 행동을 정의"""
+        """목적지 도착 시 수행할 작업"""
+        for delivery in self.deliveries[:]:  # 복사본으로 순회하여 안전하게 제거
             if self.current_position == delivery.caller_coord and not delivery.picked_up:
-                rospy.loginfo(f"Picked up the package from {delivery.caller_name}.")
+                rospy.loginfo(f"{delivery.caller_name}님으로부터 물건을 수령했습니다.")
                 delivery.picked_up = True
-                #ESP8266과 통신해서 ESP8266이 자기 할일 다했다하는거 알려주면 그때 다음 코드 동작하도록 하는 코드 추가 필요함
-            ##"""목적지(수령자)에 도달했을 때 수행할 행동을 정의"""
+                
             elif self.current_position == delivery.recipient_coord and delivery.picked_up:
-                rospy.loginfo(f"Delivered the package to {delivery.recipient_name}.")
+                rospy.loginfo(f"{delivery.recipient_name}님께 물건을 전달했습니다.")
                 self.deliveries.remove(delivery)
-                #ESP8266과 통신해서 ESP8266이 자기 할일 다했다하는거 알려주면 그때 다음 코드 동작하도록 하는 코드 추가 필요함
-        rospy.sleep(2)  # 2초 대기 후 진행
-    
+
     def run(self):
+        """메인 실행 루프"""
         rospy.spin()
 
 if __name__ == "__main__":
-    robot = DeliveryRobot()
-    robot.run()
+    try:
+        robot = DeliveryRobot()
+        robot.run()
+    except rospy.ROSInterruptException:
+        rospy.loginfo("프로그램이 종료되었습니다.")

@@ -3,3 +3,4 @@ build/
 *.exe
 .vscode/
 web_test.py
+img

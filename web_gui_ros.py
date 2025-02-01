@@ -40,7 +40,7 @@ def home():
     else:
         return redirect(url_for('login'))  # 로그인 페이지로 리디렉션
 
-# 로그인 라우트
+# 로그인 라우트 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -50,63 +50,42 @@ def login():
         try:
             # DB에서 사용자 확인
             conn = get_db_connection()
-            user = conn.execute('SELECT * FROM employees WHERE id = ? AND password = ?', (username, password)).fetchone()
+            user = conn.execute('SELECT * FROM employees WHERE id = ? AND password = ?', 
+                                (username, password)).fetchone()
             conn.close()
         except Exception as e:
-            logger.error(f"DB connection error: {e}")
             return 'Database connection error', 500
 
         if user:
-            try:
-                # 세션에 사용자 ID 저장
-                session['user_id'] = user['id']
-                logger.info(f"User logged in: {user['id']}")
-                return redirect(url_for('dashboard'))  # 대시보드로 리디렉션
-            except KeyError as e:
-                logger.error(f"Error accessing user data: {e}")
-                return 'Error accessing user data', 500
+            session['user_id'] = user['id']
+            session['name'] = user['name']
+            #  redirect는 로그인한 클라이언트 개별적으로 작용
+            return redirect(url_for('dashboard'))
         else:
-            logger.warning("Invalid credentials")
-            return 'Invalid credentials', 401  # 잘못된 로그인 정보 처리
+            return 'Invalid credentials', 401 
 
     return render_template('login.html')
 
-# 대시보드 라우트
+# 호출버튼 달린 페이지
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))  # 세션이 없으면 로그인 페이지로 리디렉션
-
-    # 세션에서 사용자 정보 가져오기
-    user_id = session['user_id']
-    conn = get_db_connection()
-
-    # 사용자 정보 가져오기
-    user = conn.execute('SELECT * FROM employees WHERE id = ?', (user_id,)).fetchone()
-
-    # user가 존재하는지 확인하고, 존재하면 로그로 모든 데이터 출력
-    if user:
-        # user 객체 로그에 출력
-        logger.info("Fetched user data from DB:")
-        for column in user.keys():  # user.keys()로 컬럼 이름을 가져옵니다.
-            logger.info(f"{column}: {user[column]}")
+    if 'name' in session:
+        name = session['name']
+        return render_template('dashboard.html', user_name = name)
     else:
-        logger.warning("User not found in the database.")
-
-    conn.close()
-
-    return render_template('dashboard.html', user=user)
-import logging
+        return redirect(url_for('login'))
 
 # 로그 설정 (파일에 기록하거나 콘솔에 출력할 수 있음)
 logging.basicConfig(level=logging.INFO)  # 콘솔에 로그 출력
 
+#주행노드로 호출인,수령인 좌표값 찾아서 뿌려주는 라우트.
 @app.route('/recipient_info', methods=['GET', 'POST'])
 def recipient_info():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     if request.method == 'POST':
+        logging.info("routing: recipient_info is called")
         recipient_name = request.form['recipient_name']
         recipient_dept = request.form['recipient_dept']
 
@@ -172,38 +151,6 @@ def recipient_info():
         return redirect(url_for('dashboard'))
     
     return render_template('recipient_info.html')
-
-# 주행 노드에서 배달 완료 메시지를 받을 때
-@socketio.on('delivery_complete')
-def handle_delivery_complete(data):
-    delivery_info = data.get('delivery_info')
-    if delivery_info in active_deliveries:
-        active_deliveries.remove(delivery_info)  # 배달이 끝났으므로 목록에서 제거
-        emit('update_status', {'status': 'A delivery has been completed.'})
-
-# 로봇 이동 현황 페이지
-@app.route('/delivery_status')
-def delivery_status():
-    return render_template('delivery_status.html')
-
-# 호출자 도착 알림 페이지
-@app.route('/arrival')
-def arrival():
-    return render_template('arrival.html')
-
-# 수령자 도착 알림 페이지
-@app.route('/recipient_arrival')
-def recipient_arrival():
-    return render_template('recipient_arrival.html')
-
-# 웹소켓을 이용한 실시간 알림 (예: 로봇 도착 알림)
-@socketio.on('connect')
-def handle_connect():
-    print("Client connected.")
-
-@socketio.on('robot_arrived')
-def handle_robot_arrival(data):
-    emit('robot_arrival', {'status': 'Robot has arrived at the destination.'})
 
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():

@@ -152,38 +152,6 @@ def recipient_info():
     
     return render_template('recipient_info.html')
 
-# 주행 노드에서 배달 완료 메시지를 받을 때
-@socketio.on('delivery_complete')
-def handle_delivery_complete(data):
-    delivery_info = data.get('delivery_info')
-    if delivery_info in active_deliveries:
-        active_deliveries.remove(delivery_info)  # 배달이 끝났으므로 목록에서 제거
-        emit('update_status', {'status': 'A delivery has been completed.'})
-
-# 로봇 이동 현황 페이지
-@app.route('/delivery_status')
-def delivery_status():
-    return render_template('delivery_status.html')
-
-# 호출자 도착 알림 페이지
-@app.route('/arrival')
-def arrival():
-    return render_template('arrival.html')
-
-# 수령자 도착 알림 페이지
-@app.route('/recipient_arrival')
-def recipient_arrival():
-    return render_template('recipient_arrival.html')
-
-# 웹소켓을 이용한 실시간 알림 (예: 로봇 도착 알림)
-@socketio.on('connect')
-def handle_connect():
-    print("Client connected.")
-
-@socketio.on('robot_arrived')
-def handle_robot_arrival(data):
-    emit('robot_arrival', {'status': 'Robot has arrived at the destination.'})
-
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():
     rospy.spin()  # spin을 통해 ROS 메시지 처리 대기

@@ -57,7 +57,7 @@ def login():
             return 'Database connection error', 500
 
         if user:
-            session['id'] = user['id']
+            session['user_id'] = user['id']
             session['name'] = user['name']
             #  redirect는 로그인한 클라이언트 개별적으로 작용
             return redirect(url_for('dashboard'))
@@ -85,6 +85,7 @@ def recipient_info():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
+        logging.info("routing: recipient_info is called")
         recipient_name = request.form['recipient_name']
         recipient_dept = request.form['recipient_dept']
 

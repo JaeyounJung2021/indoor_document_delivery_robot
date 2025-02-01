@@ -1,18 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h2 class="my-4">Welcome, {{ user['name'] }}</h2>
-        <p><strong>Department:</strong> {{ user['department'] }}</p>
-        <p><strong>Coordinates:</strong> {{ user['coordinates'] }}</p>
-        <p><strong>User ID:</strong> {{ user['id'] }}</p>
-        <a href="{{ url_for('recipient_info') }}" class="btn btn-primary">Enter Recipient Info</a>
+    <div class="dashboard-container">
+        <h2 class="welcome-message">{{ user_name }}님, 안녕하세요! 😊</h2>
+
+        <!-- 로봇 호출 버튼 -->
+        <button class="btn btn-primary btn-block robot-button" onclick="openModal()">🚀 로봇 호출</button>
+
+        <!-- 로봇 위치 조회 버튼 -->
+        <button class="btn btn-primary btn-block robot-button" onclick="openLocationModal()">🔍 로봇 위치 조회 </button>
     </div>
+
+    <!-- 🚀 로봇 호출 시 뜨는 팝업 (모달) -->
+    <div id="robotModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>📦 배달 정보 입력</h3>
+            <form action="/recipient_info" method="POST">
+                <div class="form-group">
+                    <label for="recipient_name">수령인 이름</label>
+                    <input type="text" class="form-control" id="recipient_name" name="recipient_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="recipient_dept">수령인 부서</label>
+                    <input type="text" class="form-control" id="recipient_dept" name="recipient_dept" required>
+                </div>
+                <button type="submit" class="btn btn-success btn-block">확인</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 로봇 위치 조회 팝업 -->
+    <div id="locationModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLocationModal()">&times;</span>
+            <h3>🤖로봇은 배달 중!✨</h3>
+
+            <!-- 캔버스 추가 (경로를 그리기 위한 영역) -->
+            <canvas id="robotCanvas" width="500" height="500" style="border: 1px solid #000;"></canvas>
+
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

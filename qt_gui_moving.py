@@ -13,8 +13,8 @@ class RobotCallingWindow(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Calling Robot...')
-        self.setFixedSize(400, 300)
         self.setStyleSheet('background-color: #f3f3f3;')
+        self.showFullScreen()  # 전체 화면으로 설정
         layout = QVBoxLayout()
 
         # Title
@@ -29,26 +29,15 @@ class RobotCallingWindow(QWidget):
 
         # Spinner (Loading Animation)
         self.spinner = QLabel(self)
-        self.original_pixmap = QPixmap(70, 70)  # Create an empty pixmap
-        self.original_pixmap.fill(Qt.transparent)  # Create a transparent image
-
-        # Draw circular loading spinner
-        painter = QPainter(self.original_pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        brush = QBrush(QColor("#007BFF"))
-        painter.setBrush(brush)
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(10, 10, 50, 50)  # Draw a circle
-        painter.end()
-
-        self.spinner.setPixmap(self.original_pixmap)
         self.spinner.setFixedSize(70, 70)
         layout.addWidget(self.spinner, alignment=Qt.AlignCenter)
+
+        self.createSpinnerImage()
 
         # Animation Timer
         self.animation = QTimer(self)
         self.animation.timeout.connect(self.rotateSpinner)
-        self.animation.start(16)
+        self.animation.start(50)  # 50ms마다 업데이트 (약 20FPS)
 
         # Status Text
         status_text = QLabel('The robot is moving to your location.')
@@ -58,10 +47,38 @@ class RobotCallingWindow(QWidget):
         # Set layout
         self.setLayout(layout)
 
+    def createSpinnerImage(self):
+        """ 여러 개의 원을 원형으로 배치한 로딩 애니메이션 이미지 생성 """
+        self.original_pixmap = QPixmap(70, 70)
+        self.original_pixmap.fill(Qt.transparent)
+
+        painter = QPainter(self.original_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        brush = QBrush(QColor("#007BFF"))
+        painter.setBrush(brush)
+        painter.setPen(Qt.NoPen)
+
+        center_x, center_y = 35, 35  # 중심 좌표
+        radius = 20  # 원이 배치될 반지름
+        dot_size = 8  # 점 크기
+
+        for i in range(8):  # 8개의 점을 원형으로 배치
+            angle = math.radians(i * 45)  # 360도를 8개로 나눠 배치
+            x = center_x + math.cos(angle) * radius - dot_size / 2
+            y = center_y + math.sin(angle) * radius - dot_size / 2
+            painter.drawEllipse(int(x), int(y), dot_size, dot_size)
+
+        painter.end()
+        self.spinner.setPixmap(self.original_pixmap)
+
     def rotateSpinner(self):
-        self.rotationAngle = (self.rotationAngle + 6) % 360  # Increment angle
+        """ 원형으로 배치된 점들이 회전하는 애니메이션 """
+        self.rotationAngle = (self.rotationAngle + 30) % 360  # 회전 속도 조절
         transform = QTransform()
+        transform.translate(35, 35)  # 중심으로 이동
         transform.rotate(self.rotationAngle)
+        transform.translate(-35, -35)  # 다시 원래 위치로 이동
 
         rotated_pixmap = self.original_pixmap.transformed(transform, Qt.SmoothTransformation)
         self.spinner.setPixmap(rotated_pixmap)
@@ -73,4 +90,3 @@ if __name__ == '__main__':
     ex = RobotCallingWindow()
     ex.show()
     sys.exit(app.exec_())
-

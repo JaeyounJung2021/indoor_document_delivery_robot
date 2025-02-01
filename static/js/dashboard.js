@@ -19,6 +19,11 @@ function openLocationModal() {
     startPathUpdating();  // 로봇 위치 조회 팝업이 열리면 경로 업데이트 시작
 }
 
+// 회원가입 팝업 열기
+function openRegisterModal() {
+    document.getElementById("registerModal").style.display = "flex";
+}
+
 // 팝업 닫기
 function closeModal() {
     document.getElementById("robotModal").style.display = "none";
@@ -27,6 +32,10 @@ function closeModal() {
 function closeLocationModal() {
     document.getElementById("locationModal").style.display = "none";
     stopPathUpdating();  // 팝업이 닫히면 경로 업데이트 중지
+}
+
+function closeRegisterModal() {
+    document.getElementById("registerModal").style.display = "none";
 }
 
 // 캔버스 설정

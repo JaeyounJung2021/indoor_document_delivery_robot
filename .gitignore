@@ -4,3 +4,4 @@ build/
 .vscode/
 web_test.py
 img
+initialize_db.py

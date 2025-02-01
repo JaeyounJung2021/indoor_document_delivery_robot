@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import os
@@ -151,6 +151,45 @@ def recipient_info():
         return redirect(url_for('dashboard'))
     
     return render_template('recipient_info.html')
+
+# 회원가입 엔드포인트
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['register_username']
+        password = request.form['register_password']
+        name = request.form['register_name']
+        department = request.form['register_dept']
+
+        conn = get_db_connection()
+        try:
+            # employees 테이블에 사용자 정보 저장
+            conn.execute('INSERT INTO employees (id, password, name, department) VALUES (?, ?, ?, ?)',
+                         (username, password, name, department))
+
+            # departments 테이블에서 좌표 정보 조회
+            dept_info = conn.execute('SELECT pos_x, pos_y, ori_z, ori_w FROM departments WHERE department = ?',
+                                    (department,)).fetchone()
+
+            if dept_info:
+                # employee_with_coordinates 테이블에 정보 저장
+                conn.execute('''
+                    INSERT INTO employee_with_coordinates (name, department, pos_x, pos_y, ori_z, ori_w)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (name, department, dept_info['pos_x'], dept_info['pos_y'], dept_info['ori_z'], dept_info['ori_w']))
+
+                conn.commit()
+                flash('회원가입이 완료되었습니다! 로그인해주세요.', 'success')
+            else:
+                flash('부서 정보를 찾을 수 없습니다.', 'error')
+        except sqlite3.IntegrityError:
+            flash('이미 존재하는 사용자 이름입니다.', 'error')
+        finally:
+            conn.close()
+
+        return redirect(url_for('login'))
+
+    return render_template('login.html')  # ✅ GET 요청 시 로그인 페이지 렌더링
 
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():

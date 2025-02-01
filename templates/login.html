@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
     <style>
         body {
             background-color: #f7f9fc;
@@ -38,8 +39,38 @@
                 <label for="password">Password</label>
                 <input type="password" class="form-control" id="password" name="password" required>
             </div>
-            <button type="submit" class="btn btn-primary btn-block">로그인</button>
+            <button type="submit" class="btn btn-primary btn-block robot-button">🔑로그인</button>
         </form>
+        <button class="btn btn-primary btn-block robot-button" onclick="openRegisterModal()">📝 회원가입 </button>
     </div>
+
+    <!-- 회원가입 팝업 -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeRegisterModal()">&times;</span>
+            <h3>👋 만나서 반갑습니다! </h3>
+            <form action="/register" method="POST">
+                <div class="form-group">
+                    <label for="register_username">사용자 이름</label>
+                    <input type="text" class="form-control" id="register_username" name="register_username" required>
+                </div>
+                <div class="form-group">
+                    <label for="register_password">비밀번호</label>
+                    <input type="password" class="form-control" id="register_password" name="register_password" required>
+                </div>
+                <div class="form-group">
+                    <label for="register_name">성명</label>
+                    <input type="text" class="form-control" id="register_name" name="register_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="register_dept">부서</label>
+                    <input type="text" class="form-control" id="register_dept" name="register_dept" required>
+                </div>
+                <button type="submit" class="btn btn-success btn-block">🎉가입하기</button>
+            </form>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>
+

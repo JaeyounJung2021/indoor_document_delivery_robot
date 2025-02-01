@@ -42,9 +42,9 @@ class DeliveryRobot:
         self.current_position = (0, 0)  # 로봇의 실제 위치 초기화
         self.executing_route = False  # 경로 이동 중 여부 플래그
         self.move_base_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)  # 
-        rospy.loginfo("Waiting for Action Server")
-        self.move_base_client.wait_for_server()
-        rospy.loginfo("Action Server Is Ready")
+        #rospy.loginfo("Waiting for Action Server")
+        #self.move_base_client.wait_for_server()
+        #rospy.loginfo("Action Server Is Ready")
         rospy.loginfo("Delivery robot initialized and waiting for calls.")
         self.goal_status = None  # 목표 상태를 추적하기 위한 변수
         self.event = threading.Event()  # 이벤트 객체 추가: 행동 완료를 기다리기 위한 신호
@@ -176,9 +176,10 @@ class DeliveryRobot:
         for coord, point_type, delivery in route:
             # 서브스레드가 종료 요청을 받았으면 즉시 종료
             if self.route_thread_flag:
-                rospy.loginfo("New delivery request received, stopping current route.")
+                rospy.loginfo("New delivery request received, stopping current thread.")
                 self.executing_route = False
                 self.route_thread_flag = False  # 플래그 초기화
+                rospy.loginfo("Successfully stopped original running thread.")
                 break  # 서브스레드 종료
 
             rospy.loginfo(f"Moving to {point_type} location: {coord}")
@@ -237,6 +238,7 @@ class DeliveryRobot:
         rospy.sleep(2)  # 2초 대기 후 진행
     
     def run(self):
+        rospy.loginfo("starting rospy.spin")
         rospy.spin()
 
 if __name__ == "__main__":

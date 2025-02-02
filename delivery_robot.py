@@ -54,10 +54,14 @@ class DeliveryRobot:
         self.executing_route = False
         # 현재 execute_route() 실행하는 서브 스레드가 죽을 타이밍인지 아닌지에 대한 플래그 변수
         self.route_thread_flag = False
+        # 인간과의 상호작용 대기 상태를 나타내는 플래그
+        self.waiting_for_interaction = False
+        # 대기 중에 들어온 새로운 요청을 표시하는 플래그
+        self.has_pending_requests = False
         self.event = threading.Event()
         
         # 액션 클라이언트 설정
-        self._setup_action_client()
+        ############################### self._setup_action_client()
         rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
 
     #"""퍼블리셔 초기화 메서드"""
@@ -111,6 +115,7 @@ class DeliveryRobot:
     # 웹에서 배달 요청하는 경우 자동으로 이 콜백 실행됨
     def call_request_callback(self, msg: String) -> None:
         """새로운 배송 요청 처리"""
+        rospy.loginfo("새로운 배송 요청이 들어왔고, call_request_callback이 호출되었습니다.")
         try:
             data = msg.data.split(",")
             if len(data) != 14:
@@ -118,26 +123,26 @@ class DeliveryRobot:
                 return
 
             try:
-                # caller의 x,y,z,w 좌표를 float으로 바꾸어 tuple에 담아 저장
                 caller_coord = tuple(map(float, data[2:6]))
-                # recipient의 x,y,z,w 좌표를 float으로 바꾸어 tuple에 담아 저장
                 recipient_coord = tuple(map(float, data[9:13]))
             except ValueError as e:
                 rospy.logerr(f"좌표 파싱 실패: {e}")
                 return
 
             if len(self.deliveries) < 2:
-                # delivery 객체 생성
                 new_delivery = Delivery(
                     data[0], data[1], caller_coord, data[6],
                     data[7], data[8], recipient_coord, data[13]
                 )
-                # 객체의 deliveries 변수(리스트)에 배달 객체를 append 함. 
                 self.deliveries.append(new_delivery)
                 rospy.loginfo(f"새로운 배송이 추가되었습니다: {new_delivery}")
                 
-                # 경로 계산
-                self.recalculate_route()
+                # 상호작용 대기 중이 아닐 때만 즉시 경로 계산
+                if not self.waiting_for_interaction:
+                    self.recalculate_route()
+                else:
+                    self.has_pending_requests = True
+                    rospy.loginfo("현재 로봇이 사용자와 gui의 상호작용이 끝날대까지 대기중입니다. 새로운 최적 경로 계산은 상호작용 완료 후 진행됩니다.")
             else:
                 rospy.logwarn("최대 배송 수(2개)에 도달했습니다. 배송 요청이 거부되었습니다.")
 
@@ -241,6 +246,7 @@ class DeliveryRobot:
                 if self.route_thread_flag:
                     rospy.loginfo("새로운 배송 요청으로 인해 현재 경로가 취소되었습니다")
                     # 서브스레드 자살
+                    rospy.loginfo("서브스레드가 죽습니다,,,")
                     break
 
                 rospy.loginfo(f"{point_type} 위치로 이동 중: {coord}")
@@ -248,6 +254,7 @@ class DeliveryRobot:
                 
                 self.event.clear()
                 # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
+                rospy.loginfo("로봇과 인간의 상호작용이 끝날때까지 대기,,,,,,,,,")
                 self.event.wait()
                 
                 rospy.sleep(3)
@@ -279,7 +286,10 @@ class DeliveryRobot:
             
         latest_status = status.status_list[-1].status
         if latest_status == 3:  # 성공
-            rospy.loginfo("목표 지점에 도달했습니다")
+            rospy.loginfo("status 3 을 받았습니다")
+            self.waiting_for_interaction = True
+            self.perform_action_at_destination()
+
         elif latest_status == 4:  # 실패
             rospy.logwarn("목표 도달 실패 - 재시도 중")
             self._handle_goal_aborted()
@@ -299,28 +309,40 @@ class DeliveryRobot:
 
     def is_interacting_with_human_callback(self, msg: String) -> None:
         """사용자 상호작용 완료 처리"""
-        if msg.data == "done":
-            rospy.loginfo("사용자와의 상호작용이 완료되었습니다.")
-            self.perform_action_at_destination()
-            self.event.set()
+        if msg.data == "done" and self.waiting_for_interaction:
+            # 현재 위치가 호출자 위치와 가까운지 확인
+            for delivery in self.deliveries[:]:
+                if self._is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
+                    rospy.loginfo(f"{delivery.caller_name}님이 로봇에 물건을 성공적으로 적재하였습니다!")
+                    delivery.picked_up = True
+                elif self._is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
+                    rospy.loginfo(f"{delivery.recipient_name}님이 로봇에 성공적으로 물건을 수령하였습니다!")
+                    rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
+                    self.deliveries.remove(delivery)
+
+            # 상호작용 대기 상태 해제
+            self.waiting_for_interaction = False
+            rospy.loginfo("로봇과 사용자의 대면 상호작용이 끝났습니다!")
+
+            # 대기 중에 들어온 요청이 있었다면 사용자와의 상호작용 결과를 반영해서 경로 재계산
+            if self.has_pending_requests:
+                rospy.loginfo("대기 중 들어온 요청에 대한 경로를 계산합니다.")
+                self.recalculate_route()
+                self.has_pending_requests = False
+
+    def _is_close(self, pos1, pos2, threshold=0.5):
+        """두 점이 가까운지 확인하는 함수"""
+        distance = math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
+        return distance < threshold
 
     def perform_action_at_destination(self):
-        #"""목적지 도착 시 수행할 작업"""
-        THRESHOLD = 1  # 1m 이내면 좌표가 동일하다고 판단
-
-        def is_close(pos1, pos2):
-            """두 점이 가까운지 확인하는 함수"""
-            distance = math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
-            return distance < THRESHOLD
-
+        """목적지 도착 시 수행할 작업"""
         for delivery in self.deliveries[:]:  # 복사본으로 순회하여 안전하게 제거
-            if is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
-                rospy.loginfo(f"{delivery.caller_name}님으로부터 물건을 수령했습니다.")
-                delivery.picked_up = True
+            if self._is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
+                rospy.loginfo(f"{delivery.caller_name}님의 위치에 도착했습니다. 호출자의 물건 적재를 대기합니다.")
+            elif self._is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
+                rospy.loginfo(f"{delivery.recipient_name}님의 위치에 도착했습니다. 수령자의 물건 수령을 대기합니다.")
 
-            elif is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
-                rospy.loginfo(f"{delivery.recipient_name}님께 물건을 전달했습니다.")
-                self.deliveries.remove(delivery)
 
     def run(self):
         """메인 실행 루프"""

@@ -24,12 +24,12 @@ def moving_status_callback(msg):
         elif status == 3:  # /move_base/status == 3 이면 목적지 도착
             if gui_process2 is None:
                 rospy.loginfo("로봇 목적지 도착상태일때의 qt GUI 실행")
-                gui_process2 = subprocess.Popen(["python3", "qt_gui_arrived.py"])
+                gui_process2 = subprocess.Popen(["python3", "qt_gui_path.py"])
                 if gui_process1:  # gui_process1이 실행 중이라면 종료
                     gui_process1.terminate()
                     gui_process1 = None
 
-#키 입력으로 qt테스트 하기 위한 코드(추후 삭제제)
+#키 입력으로 qt테스트 하기 위한 코드(추후 삭제)
 def test_gui_execution():
     while True:
         user_input = input("1: 이동중, 3: 목적지 도착, q: 종료: ")
@@ -46,7 +46,7 @@ def test_gui_execution():
 def main():
     rospy.init_node('qt_gui_node', anonymous=True)
     rospy.Subscriber('/move_base/status', GoalStatusArray, moving_status_callback)
-    # 테스트 모드에서는 토픽을 구독하는 대신 키 입력으로 테스트(추후 삭제제)
+    # 테스트 모드에서는 토픽을 구독하는 대신 키 입력으로 테스트(추후 삭제)
     test_gui_execution()
     rospy.spin()
 

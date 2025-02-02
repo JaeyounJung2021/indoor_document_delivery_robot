@@ -1,3 +1,5 @@
+//웹소켓 등록록
+var socket = io("http://localhost:5000");
 // 바깥 클릭 시 모달 닫기
 window.onclick = function(event) {
     var modal = document.getElementById("robotModal");
@@ -89,29 +91,39 @@ function updatePath(message) {
     }
 }
 
-
 //수령인, 호출인 웹푸시 알림 구현 부분(웹 푸쉬 알림)
-var socket = io();
+
+//사용자에게 알림권한 요청
+if (Notification.permission === "granted") {
+    // 알림을 보낼 준비가 된 경우
+    console.log("알림 권한이 승인되었습니다.");
+} else {
+    Notification.requestPermission().then(function(permission) {
+        if (permission === "granted") {
+            console.log("알림 권한이 승인되었습니다.");
+        } else {
+            console.log("알림 권한이 거부되었습니다.");
+        }
+    });
+}
+
+//Service Workder 등록 (웹푸시)
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js").then(registration => {
+        console.log("✅ Service Worker 등록 성공:", registration);
+    }).catch(error => {
+        console.log("❌ Service Worker 등록 실패:", error);
+    });
+}
 
 // 웹 푸시 알림 처리
 socket.on("web_push", function(data) {
-    showNotification(data.title, data.message);
-});
-
-// 알림 표시 함수
-function showNotification(title, message) {
-    if (!("Notification" in window)) {
-        alert("이 브라우저는 알림을 지원하지 않습니다.");
-        return;
-    }
-
-    if (Notification.permission === "granted") {
-        new Notification(title, { body: message });
-    } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") {
-                new Notification(title, { body: message });
-            }
+    if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+            title: data.title,
+            message: data.message
         });
+    } else {
+        console.log("❌ Service Worker가 활성화되지 않았습니다.");
     }
-}
+});

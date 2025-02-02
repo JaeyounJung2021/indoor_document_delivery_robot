@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import os
@@ -25,6 +25,9 @@ connected_clients = {}
 robot_arrived = False
 target_user_id = None
 target_user_role = None
+
+#자원경쟁 방지를 위한 쓰레드락
+push_lock = threading.Lock()
 
 
 # 글로벌 변수로 배달 객체 관리
@@ -159,6 +162,10 @@ def recipient_info():
     
     return render_template('recipient_info.html')
 
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory('static/js', 'service-worker.js', mimetype='application/javascript')
+
 #서버가 특정 클라이언트에게만 푸시알림을 보내기 위한 socketio
 #connect, disconnect에서 sid를 사용하는 이유 -> 웹 끄면 자동으로 sid연결이 끊겨서 딕셔너리 자동정리.
 @socketio.on("connect")
@@ -194,27 +201,23 @@ def id_role_callback(msg):
 def check_and_send_web_push():
     global robot_arrived, target_user_id, target_user_role
     while True:
-        if robot_arrived and target_user_id:
-            if target_user_role == 'recipient':
-                message = f"로봇이 도착했습니다! 물건을 수령하세요."
-            elif target_user_role == 'summoner':
-                message = f"로봇이 도착했습니다! 요청한 위치에 도착했습니다."
+        with push_lock:
+            if robot_arrived and target_user_id:
+                if target_user_role == 'recipient':
+                    message = f"로봇이 도착했습니다! 물건을 수령하세요."
+                elif target_user_role == 'summoner':
+                    message = f"로봇이 도착했습니다! 요청한 위치에 도착했습니다."
 
-            rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
-            socketio.emit("web_push", {"title": "로봇 도착 알림", "message": message}, room=target_user_id)  # 특정 유저에게만 전송
+                rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
+                socketio.emit("web_push", {"title": "로봇 도착 알림", "message": message}, room=target_user_id)  # 특정 유저에게만 전송
 
-            robot_arrived = False  # 초기화
-        time.sleep(1)
+                robot_arrived = False  # 초기화
+            time.sleep(1)
+
 
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():
     rospy.spin()  # spin을 통해 ROS 메시지 처리 대기
-
-# GUI 관련 작업을 위한 별도 스레드 함수 (예시로 time.sleep을 사용)
-def run_gui():
-    while True:
-        time.sleep(1)
-        print("Running GUI thread...")  # GUI 관련 코드로 대체
 
 # Flask 서버 실행을 위한 별도 스레드 함수
 def run_flask():
@@ -227,29 +230,27 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    
     # 메인 스레드에서 rospy 노드 초기화
     rospy.init_node('robot_web_server_node', anonymous=True)  # 노드 초기화
-
+    #웹푸시 쓰레드 실행
+    threading.Thread(target=check_and_send_web_push, daemon=True).start()
+    
     # 로깅 재설정 (ROS 노드가 로깅을 덮어쓰는 문제 해결하기위해)
     logger.handlers = []  # 기존 핸들러 제거
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     
 
-    # 3개의 스레드 생성
+    # 2개의 스레드 생성
     flask_thread = threading.Thread(target=run_flask)
     ros_thread = threading.Thread(target=ros_spin)
-    gui_thread = threading.Thread(target=run_gui)
 
     # 스레드 시작
     logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Flask web 서버가 실행됩니다!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!") 
     flask_thread.start()
     ros_thread.start()
-    gui_thread.start()
 
     # 스레드가 종료될 때까지 대기
     flask_thread.join()
     ros_thread.join()
-    gui_thread.join()
 
-    #웹푸시 쓰레드 실행
-    threading.Thread(target=check_and_send_web_push, daemon=True).start()

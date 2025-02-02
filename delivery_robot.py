@@ -188,8 +188,14 @@ class DeliveryRobot:
         # 서브스레드가 execute_route()를 지금 실행중이라면 액션 서버와 통신하여 기존의 서브스레드에 의한 goal 취소함
         if self.executing_route:
             rospy.loginfo("현재 경로를 취소하고 새로운 경로로 변경합니다.")
+            ##기존의 목표 좌표 취소
             self.move_base_client.cancel_all_goals()
+            #서브스레드가 죽을 타이밍이라고 설정
             self.route_thread_flag = True
+            self.event.set()
+            rospy.loginfo("서브스레드가 정상 종료될때까지 메인스레드가 대기합니다,,,,,")
+            #서브스레드가 죽을때까지 메인스레드가 대기
+            self.route_thread.join()
         # 서브스레드 만들어서 서브스레드가 execute_route()실행 하도록함
         self.execute_route_in_thread(best_route)
 
@@ -257,7 +263,6 @@ class DeliveryRobot:
                 rospy.loginfo("로봇과 인간의 상호작용이 끝날때까지 대기,,,,,,,,,")
                 self.event.wait()
                 
-                rospy.sleep(3)
                 
         except Exception as e:
             rospy.logerr(f"경로 실행 중 오류 발생: {e}")
@@ -303,9 +308,9 @@ class DeliveryRobot:
             rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/3)")
             self.move_command(*self.current_goal.pose.position)
         else:
-            rospy.logerr("3회 시도 후 네비게이션 실패")
+            rospy.logerr("3회 시도 후 네비게이션 실패,,,,,,관리자에게 연락합니다")
             self._retry_count = 0
-            self.event.set()
+            
 
     def is_interacting_with_human_callback(self, msg: String) -> None:
         """사용자 상호작용 완료 처리"""
@@ -324,11 +329,17 @@ class DeliveryRobot:
             self.waiting_for_interaction = False
             rospy.loginfo("로봇과 사용자의 대면 상호작용이 끝났습니다!")
 
+
             # 대기 중에 들어온 요청이 있었다면 사용자와의 상호작용 결과를 반영해서 경로 재계산
             if self.has_pending_requests:
                 rospy.loginfo("대기 중 들어온 요청에 대한 경로를 계산합니다.")
+
                 self.recalculate_route()
                 self.has_pending_requests = False
+            else:
+                self.event.set()
+            #대기중에 들어온 요청이 없다면 execute_route() 실행하던 스레드에게 동작 재개 신호 보냄
+
 
     def _is_close(self, pos1, pos2, threshold=0.5):
         """두 점이 가까운지 확인하는 함수"""

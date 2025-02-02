@@ -88,3 +88,30 @@ function updatePath(message) {
         pathHistory.shift();
     }
 }
+
+
+//수령인, 호출인 웹푸시 알림 구현 부분(웹 푸쉬 알림)
+var socket = io();
+
+// 웹 푸시 알림 처리
+socket.on("web_push", function(data) {
+    showNotification(data.title, data.message);
+});
+
+// 알림 표시 함수
+function showNotification(title, message) {
+    if (!("Notification" in window)) {
+        alert("이 브라우저는 알림을 지원하지 않습니다.");
+        return;
+    }
+
+    if (Notification.permission === "granted") {
+        new Notification(title, { body: message });
+    } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                new Notification(title, { body: message });
+            }
+        });
+    }
+}

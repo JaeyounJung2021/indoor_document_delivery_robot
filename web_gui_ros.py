@@ -12,12 +12,19 @@ from geometry_msgs.msg import PoseStamped
 from move_base_msgs.msg import MoveBaseActionResult
 import logging
 import time
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from actionlib_msgs.msg import GoalStatusArray
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-
+#호출자,수령인에게 로봇 도착시 웹 푸시 알림. 
+#접속할 클라이언트들의 user_id를 저장할 딕셔너리 (세션ID -> user_id 매핑)
+connected_clients = {}
+#로봇 상태 변수
+robot_arrived = False
+target_user_id = None
+target_user_role = None
 
 
 # 글로벌 변수로 배달 객체 관리
@@ -152,6 +159,53 @@ def recipient_info():
     
     return render_template('recipient_info.html')
 
+#서버가 특정 클라이언트에게만 푸시알림을 보내기 위한 socketio
+#connect, disconnect에서 sid를 사용하는 이유 -> 웹 끄면 자동으로 sid연결이 끊겨서 딕셔너리 자동정리.
+@socketio.on("connect")
+def handle_connect():
+    if "user_id" in session:
+        sid = request.sid  # 현재 소켓 연결의 세션 ID
+        connected_clients[sid] = session["user_id"]  # 현재 클라이언트 저장
+        join_room(session["user_id"])  # 각 user_id를 방(room)으로 사용
+        rospy.loginfo(f"{session['user_id']} 접속 (SID: {sid})")
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    sid = request.sid
+    if sid in connected_clients:
+        user_id = connected_clients.pop(sid)  # 연결 해제된 유저 정보 제거
+        leave_room(user_id)
+        rospy.loginfo(f"{user_id} 접속 해제 (SID: {sid})")
+
+#move_base/status 콜백 (로봇 도착 확인)
+def move_base_callback(msg):
+    global robot_arrived
+    if msg.status_list and msg.status_list[-1].status == 3:  # 도착 (status == 3)
+        robot_arrived = True
+
+# 도착 대상자 정보 받기 (id_호출자 또는 id_수령인)
+def id_role_callback(msg):
+    global target_user_id, target_user_role
+    data = msg.data  # 예: "user1_receipient"
+    id,role = data.split('_') #예: 'user1' , 'receipient'
+    target_user_id = id
+    target_user_role = role
+
+def check_and_send_web_push():
+    global robot_arrived, target_user_id, target_user_role
+    while True:
+        if robot_arrived and target_user_id:
+            if target_user_role == 'recipient':
+                message = f"로봇이 도착했습니다! 물건을 수령하세요."
+            elif target_user_role == 'summoner':
+                message = f"로봇이 도착했습니다! 요청한 위치에 도착했습니다."
+
+            rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
+            socketio.emit("web_push", {"title": "로봇 도착 알림", "message": message}, room=target_user_id)  # 특정 유저에게만 전송
+
+            robot_arrived = False  # 초기화
+        time.sleep(1)
+
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():
     rospy.spin()  # spin을 통해 ROS 메시지 처리 대기
@@ -165,6 +219,9 @@ def run_gui():
 # Flask 서버 실행을 위한 별도 스레드 함수
 def run_flask():
     socketio.run(app, debug=True, use_reloader=False)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
+
+rospy.Subscriber("/move_base/status", GoalStatusArray, move_base_callback)
+rospy.Subscriber("/human_to_meet", String, id_role_callback)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -193,3 +250,6 @@ if __name__ == '__main__':
     flask_thread.join()
     ros_thread.join()
     gui_thread.join()
+
+    #웹푸시 쓰레드 실행
+    threading.Thread(target=check_and_send_web_push, daemon=True).start()

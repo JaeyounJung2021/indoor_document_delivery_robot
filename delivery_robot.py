@@ -11,6 +11,7 @@ from typing import List, Tuple, Optional
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
+    #':' 는 '타입 힌트'라는 파이썬 문법으로, '이 매개변수로 들어와야하는 데이터의 타입이 ~여야함' 을 알려줌
     def __init__(self, caller_name: str, caller_dept: str, 
                  caller_coord: Tuple[float, float, float, float], caller_id: str,
                  recipient_name: str, recipient_dept: str, 
@@ -24,9 +25,11 @@ class Delivery:
         self.recipient_coord = recipient_coord
         self.recipient_id = recipient_id
         self.picked_up = False
-        
+    
+    #'->' 는 '타입 힌트'라는 파이썬 문법으로, 이 함수가 반환하는 데이터의 타입이 str임을 알려줌
+    #객체 생성될때 자동으로 호출됨
     def __str__(self) -> str:
-        return f"배송 요청: {self.caller_name}님 → {self.recipient_name}님"
+        return f"배송 요청이 들어왔습니다: {self.caller_name}님 → {self.recipient_name}님"
 
 class DeliveryRobot:
     def __init__(self):
@@ -39,10 +42,17 @@ class DeliveryRobot:
         self._init_subscribers()
         
         # 상태 관리 변수들
+        # self.deliveries: List[Delivery] = [] 에서 : List[Delivery] 는 타입 힌트임.
+        # 리스트안에 요소로 Delivery 객체가 들어가야함을 의미함. 사실은 self.deliveries = [] 임
+        # delilvery 객체 담을 리스트
         self.deliveries: List[Delivery] = []
+        # 현재 목표지점 담는 변수
         self.current_goal = PoseStamped()
+        # 현재 위치 담는 변수
         self.current_position: Tuple[float, float, float, float] = (0, 0, 0, 0)
+        # 현재 서브 스레드가 execute_route() 실행중인지 아닌지를 저장하는 플래그 변수
         self.executing_route = False
+        # 현재 execute_route() 실행하는 서브 스레드가 죽을 타이밍인지 아닌지에 대한 플래그 변수
         self.route_thread_flag = False
         self.event = threading.Event()
         
@@ -50,17 +60,19 @@ class DeliveryRobot:
         self._setup_action_client()
         rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
 
+    #"""퍼블리셔 초기화 메서드"""
     def _init_publishers(self):
-        """퍼블리셔 초기화 메서드"""
+        
         try:
             self.pub_goal = rospy.Publisher("/move_base_simple_goal", PoseStamped, queue_size=10)
             self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
         except Exception as e:
             rospy.logerr(f"퍼블리셔 초기화 실패: {e}")
             raise
-
+    
+    #"""서브스크라이버 초기화 메서드"""
     def _init_subscribers(self):
-        """서브스크라이버 초기화 메서드"""
+        
         try:
             self.call_sub = rospy.Subscriber("/call_request", String, 
                                            self.call_request_callback)
@@ -79,18 +91,24 @@ class DeliveryRobot:
     def _setup_action_client(self):
         """move_base 액션 클라이언트 초기화"""
         self.move_base_client = actionlib.SimpleActionClient('/move_base', MoveBaseAction)
+        # 30초안에 액션 서버와 연결안되면 아래 코드 실행
         if not self.move_base_client.wait_for_server(rospy.Duration(30.0)):
-            rospy.logerr("이동 베이스 액션 서버를 사용할 수 없습니다!")
+            rospy.logerr("이동 베이스 액션 서버를 사용할 수 없습니다! navigation 관련 노드(move_base,,,map,,,등)의 노드를 실행시켰는지 확인하세요!")
             raise RuntimeError("액션 서버 연결 실패!")
+        #액션 서버와 정상 연결시 아래 코드 실행
         rospy.loginfo("액션 서버가 준비되었습니다.")
 
+    #"""AMCL로부터 로봇의 현재 위치를 업데이트"""
     def amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
-        """AMCL로부터 로봇의 현재 위치를 업데이트"""
+        
         position = msg.pose.pose.position
         orientation = msg.pose.pose.orientation
+        # 로봇의 amcl 기반 현재 위치 저장하는 변수
         self.current_position = (position.x, position.y, orientation.z, orientation.w)
         rospy.logdebug(f"현재 위치가 업데이트되었습니다: {self.current_position}")
 
+    # /call_request 토픽으로 메시지 올때마다 실행되는 콜백함수
+    # 웹에서 배달 요청하는 경우 자동으로 이 콜백 실행됨
     def call_request_callback(self, msg: String) -> None:
         """새로운 배송 요청 처리"""
         try:
@@ -100,80 +118,97 @@ class DeliveryRobot:
                 return
 
             try:
+                # caller의 x,y,z,w 좌표를 float으로 바꾸어 tuple에 담아 저장
                 caller_coord = tuple(map(float, data[2:6]))
+                # recipient의 x,y,z,w 좌표를 float으로 바꾸어 tuple에 담아 저장
                 recipient_coord = tuple(map(float, data[9:13]))
             except ValueError as e:
                 rospy.logerr(f"좌표 파싱 실패: {e}")
                 return
 
             if len(self.deliveries) < 2:
+                # delivery 객체 생성
                 new_delivery = Delivery(
                     data[0], data[1], caller_coord, data[6],
                     data[7], data[8], recipient_coord, data[13]
                 )
+                # 객체의 deliveries 변수(리스트)에 배달 객체를 append 함. 
                 self.deliveries.append(new_delivery)
                 rospy.loginfo(f"새로운 배송이 추가되었습니다: {new_delivery}")
                 
-                # 경로 재계산
+                # 경로 계산
                 self.recalculate_route()
             else:
-                rospy.logwarn("최대 배송 수(2개)에 도달했습니다. 요청이 거부되었습니다.")
+                rospy.logwarn("최대 배송 수(2개)에 도달했습니다. 배송 요청이 거부되었습니다.")
 
         except Exception as e:
             rospy.logerr(f"배송 요청 처리 중 오류 발생: {e}")
 
+    #"""현재 위치에서 최적의 배송 순서를 결정하는 메서드"""
     def recalculate_route(self):
-        """현재 위치에서 최적의 배송 순서를 결정하는 메서드"""
+        
+         
         if not self.deliveries:
             rospy.loginfo("처리할 배송 요청이 없습니다.")
             return
         
         waypoints = []
         for delivery in self.deliveries:
+            # delivery 객체의 picked_up 플래그 변수가 True이면 그 delivery 객체의 수령자의 좌표만 담음. 
+            # delivery 객체의 picked_up 플래그 변수가 False 이면 그 delivery 객체의 호출자, 수령자의 좌표 모두 담음.
             if not delivery.picked_up:
-                waypoints.append((delivery.caller_coord, "호출자", delivery))
-            waypoints.append((delivery.recipient_coord, "수령자", delivery))
+                # 좌표, 포인트타입, delivery 객체를 지역 변수인 waypoints에 apped함
+                waypoints.append((delivery.caller_coord, "caller", delivery))
+            waypoints.append((delivery.recipient_coord, "recipient", delivery))
         
+        #최솟값을 구해야 하니까 일단 매우 큰 수로 초기화
         min_distance = float('inf')
         best_route = []
 
+        # 가능한 모든 waypoints 내부 요소의 순서에 대한 경우의수(순열,permutation)에 대해 반복문 돌림
+        # perm에는 튜플 형태로 경우의수가 저장됨 ex) (A호출자, B수령자, B호출자, A수령자)
         for perm in permutations(waypoints):
+            # 수령자 k가 호출자k보다 앞에 있는 경우의수는 전부 continue 써서 걸러냄
             if not self._is_valid_sequence(perm):
                 continue
-                
+            # 각 perm에 대해서 이동 해야하는 총 거리 저장 (x,y 좌표로만 계산)
             total_distance = self._calculate_route_distance(perm)
             if total_distance < min_distance:
                 min_distance = total_distance
+                # 모든 perm에 대해 반복문 다 돌리면 지역변수 best_route에는 총 이동거리가 가장 짧은 perm이 저장됨
                 best_route = perm
         
         rospy.loginfo(f"최적 경로가 계산되었습니다. 총 거리: {min_distance:.2f}m")
         
+        # 서브스레드가 execute_route()를 지금 실행중이라면 액션 서버와 통신하여 기존의 서브스레드에 의한 goal 취소함
         if self.executing_route:
             rospy.loginfo("현재 경로를 취소하고 새로운 경로로 변경합니다.")
             self.move_base_client.cancel_all_goals()
             self.route_thread_flag = True
-        
+        # 서브스레드 만들어서 서브스레드가 execute_route()실행 하도록함
         self.execute_route_in_thread(best_route)
 
+    #"""경로의 유효성(각 순열에 대해 호출자 k가 수령자 k보다 앞에 있는지)을 검증"""
     def _is_valid_sequence(self, route) -> bool:
-        """경로의 유효성을 검증"""
+        
         visited_deliveries = set()
         
         for coord, point_type, delivery in route:
-            if point_type == "수령자":
+            if point_type == "recipient":
                 if delivery.picked_up:
                     if delivery not in visited_deliveries:
                         visited_deliveries.add(delivery)
                 elif delivery not in visited_deliveries:
                     return False
-            elif point_type == "호출자":
+            elif point_type == "caller":
                 if not delivery.picked_up and delivery not in visited_deliveries:
                     visited_deliveries.add(delivery)
                     
         return True
 
+    #"""주어진 경로의 총 이동 거리를 계산"""
     def _calculate_route_distance(self, route) -> float:
-        """주어진 경로의 총 이동 거리를 계산"""
+        
         total_distance = 0.0
         current_pos = self.current_position
         
@@ -197,6 +232,7 @@ class DeliveryRobot:
         route_thread.start()
         rospy.loginfo("경로 실행 스레드가 시작되었습니다.")
 
+    #route 에는 최적 경로로 판단된  perm이 들어감
     def execute_route(self, route: List[Tuple]) -> None:
         """배송 경로 실행"""
         self.executing_route = True
@@ -204,15 +240,15 @@ class DeliveryRobot:
             for coord, point_type, delivery in route:
                 if self.route_thread_flag:
                     rospy.loginfo("새로운 배송 요청으로 인해 현재 경로가 취소되었습니다")
+                    # 서브스레드 자살
                     break
 
                 rospy.loginfo(f"{point_type} 위치로 이동 중: {coord}")
                 self.move_command(*coord)
                 
                 self.event.clear()
-                if not self.event.wait(timeout=300.0):
-                    rospy.logerr("목적지 도착 대기 시간 초과")
-                    continue
+                # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
+                self.event.wait()
                 
                 rospy.sleep(3)
                 
@@ -235,6 +271,7 @@ class DeliveryRobot:
         self.move_base_client.send_goal(goal)
         rospy.loginfo(f"이동 목표가 설정되었습니다: ({pos_x}, {pos_y})")
 
+    # 이 콜백은 도착 정보에대한 로그만 남김
     def status_callback(self, status: GoalStatusArray) -> None:
         """이동 상태 업데이트 처리"""
         if not status.status_list:
@@ -243,13 +280,13 @@ class DeliveryRobot:
         latest_status = status.status_list[-1].status
         if latest_status == 3:  # 성공
             rospy.loginfo("목표 지점에 도달했습니다")
-            self.perform_action_at_destination()
         elif latest_status == 4:  # 실패
             rospy.logwarn("목표 도달 실패 - 재시도 중")
             self._handle_goal_aborted()
 
+    #"""실패한 네비게이션 처리"""
     def _handle_goal_aborted(self) -> None:
-        """실패한 네비게이션 처리"""
+        
         retry_count = getattr(self, '_retry_count', 0)
         if retry_count < 3:
             self._retry_count = retry_count + 1
@@ -268,13 +305,20 @@ class DeliveryRobot:
             self.event.set()
 
     def perform_action_at_destination(self):
-        """목적지 도착 시 수행할 작업"""
+        #"""목적지 도착 시 수행할 작업"""
+        THRESHOLD = 1  # 1m 이내면 좌표가 동일하다고 판단
+
+        def is_close(pos1, pos2):
+            """두 점이 가까운지 확인하는 함수"""
+            distance = math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
+            return distance < THRESHOLD
+
         for delivery in self.deliveries[:]:  # 복사본으로 순회하여 안전하게 제거
-            if self.current_position == delivery.caller_coord and not delivery.picked_up:
+            if is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
                 rospy.loginfo(f"{delivery.caller_name}님으로부터 물건을 수령했습니다.")
                 delivery.picked_up = True
-                
-            elif self.current_position == delivery.recipient_coord and delivery.picked_up:
+
+            elif is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
                 rospy.loginfo(f"{delivery.recipient_name}님께 물건을 전달했습니다.")
                 self.deliveries.remove(delivery)
 

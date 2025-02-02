@@ -66,6 +66,7 @@ def initialize_database():
         ('user3', 'password3', 'kyungbin', 'Marketing'),
         ('user4', 'password4', 'doyun', 'R&D'),
         ('user5', 'password5', 'seoyun', 'R&D')
+        ('user6', 'password6', 'dajeong', 'R&D')
     ]
 
     cursor.executemany('''

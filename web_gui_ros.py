@@ -14,6 +14,7 @@ import logging
 import time
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from actionlib_msgs.msg import GoalStatusArray
+import signal
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -34,7 +35,7 @@ push_lock = threading.Lock()
 active_deliveries = deque(maxlen=2)  # 최대 2개의 배달만 처리
 
 # SocketIO 객체 생성
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # DB 연결 함수
 def get_db_connection():
@@ -194,7 +195,7 @@ def move_base_callback(msg):
 def id_role_callback(msg):
     global target_user_id, target_user_role
     data = msg.data  # 예: "user1_receipient"
-    id,role = data.split('_') #예: 'user1' , 'receipient'
+    id,role = data.split(',') #예: 'user1' , 'receipient'
     target_user_id = id
     target_user_role = role
 
@@ -205,15 +206,19 @@ def check_and_send_web_push():
             if robot_arrived and target_user_id:
                 if target_user_role == 'recipient':
                     message = f"로봇이 도착했습니다! 물건을 수령하세요."
-                elif target_user_role == 'summoner':
+                elif target_user_role == 'caller':
                     message = f"로봇이 도착했습니다! 요청한 위치에 도착했습니다."
 
-                rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
                 socketio.emit("web_push", {"title": "로봇 도착 알림", "message": message}, room=target_user_id)  # 특정 유저에게만 전송
+                rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
 
                 robot_arrived = False  # 초기화
             time.sleep(1)
 
+def signal_handler(sig, frame):
+    rospy.loginfo("종료 시그널 수신, ROS 노드 및 웹 서버 종료...")
+    rospy.signal_shutdown("Shutdown requested by signal handler")
+    socketio.stop()  # Flask 서버 종료
 
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():
@@ -221,7 +226,7 @@ def ros_spin():
 
 # Flask 서버 실행을 위한 별도 스레드 함수
 def run_flask():
-    socketio.run(app, debug=True, use_reloader=False)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
+    socketio.run(app, debug=True, use_reloader=False, ssl_context=('cert.pem', 'key.pem'))  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
 
 rospy.Subscriber("/move_base/status", GoalStatusArray, move_base_callback)
 rospy.Subscriber("/human_to_meet", String, id_role_callback)
@@ -233,6 +238,11 @@ if __name__ == '__main__':
     
     # 메인 스레드에서 rospy 노드 초기화
     rospy.init_node('robot_web_server_node', anonymous=True)  # 노드 초기화
+    
+    # 종료 시그널 처리 (Ctrl+C 또는 kill 명령어)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     #웹푸시 쓰레드 실행
     threading.Thread(target=check_and_send_web_push, daemon=True).start()
     

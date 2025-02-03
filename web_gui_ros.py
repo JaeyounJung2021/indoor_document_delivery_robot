@@ -203,7 +203,7 @@ def run_gui():
 
 # Flask 서버 실행을 위한 별도 스레드 함수
 def run_flask():
-    socketio.run(app, debug=True, use_reloader=False)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
+    socketio.run(app, debug=True, use_reloader=False, host = '0.0.0.0', port = 5000)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

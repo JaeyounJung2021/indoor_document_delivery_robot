@@ -1,5 +1,5 @@
 //웹소켓 등록록
-var socket = io("https://localhost:5000",{transports:['websocket'],withCredentials:true});
+var socket = io("https://192.168.0.3:5000",{transports:['websocket'],withCredentials:true});
 console.log("JS시작!!!!!!!!!!!!!!")
 // 바깥 클릭 시 모달 닫기
 window.onclick = function(event) {

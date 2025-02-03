@@ -243,8 +243,9 @@ class DeliveryRobot:
             rospy.logwarn("실행할 경로가 없습니다.")
             return
             
-        route_thread = threading.Thread(target=self.execute_route, args=(route,))
-        route_thread.start()
+        # Store the thread as an instance attribute
+        self.route_thread = threading.Thread(target=self.execute_route, args=(route,))
+        self.route_thread.start()
         rospy.loginfo("경로 실행 스레드가 시작되었습니다.")
 
     #route 에는 최적 경로로 판단된  perm이 들어감

@@ -295,10 +295,10 @@ class DeliveryRobot:
             rospy.loginfo("목표 지점 도달 성공")
             self.waiting_for_interaction = True
             self.perform_action_at_destination()
-        elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
+        '''elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
                                     actionlib_msgs.msg.GoalStatus.REJECTED]:
             rospy.logwarn("목표 도달 실패")
-            self._handle_goal_aborted()
+            self._handle_goal_aborted()'''
 
     #"""실패한 네비게이션 처리"""
     def _handle_goal_aborted(self) -> None:

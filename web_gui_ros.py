@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import os
@@ -12,21 +12,31 @@ from geometry_msgs.msg import PoseStamped
 from move_base_msgs.msg import MoveBaseActionResult
 import logging
 import time
-from flask_socketio import SocketIO, emit
 import signal
 import sys
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from actionlib_msgs.msg import GoalStatusArray
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
+#호출자,수령인에게 로봇 도착시 웹 푸시 알림. 
+#접속할 클라이언트들의 user_id를 저장할 딕셔너리 (세션ID -> user_id 매핑)
+connected_clients = {}
+#로봇 상태 변수
+robot_arrived = False
+target_user_id = None
+target_user_role = None
 
+#자원경쟁 방지를 위한 쓰레드락
+push_lock = threading.Lock()
 
 
 # 글로벌 변수로 배달 객체 관리
 active_deliveries = deque(maxlen=2)  # 최대 2개의 배달만 처리
 
 # SocketIO 객체 생성
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # DB 연결 함수
 def get_db_connection():
@@ -191,36 +201,94 @@ def register():
 
     return render_template('login.html')  # ✅ GET 요청 시 로그인 페이지 렌더링
 
+
+#서버가 특정 클라이언트에게만 푸시알림을 보내기 위한 socketio
+#connect, disconnect에서 sid를 사용하는 이유 -> 웹 끄면 자동으로 sid연결이 끊겨서 딕셔너리 자동정리.
+@socketio.on("connect")
+def handle_connect():
+    if "user_id" in session:
+        sid = request.sid  # 현재 소켓 연결의 세션 ID
+        connected_clients[sid] = session["user_id"]  # 현재 클라이언트 저장
+        join_room(session["user_id"])  # 각 user_id를 방(room)으로 사용
+        rospy.loginfo(f"{session['user_id']} 접속 (SID: {sid})")
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    sid = request.sid
+    if sid in connected_clients:
+        user_id = connected_clients.pop(sid)  # 연결 해제된 유저 정보 제거
+        leave_room(user_id)
+        rospy.loginfo(f"{user_id} 접속 해제 (SID: {sid})")
+
+#move_base/status 콜백 (로봇 도착 확인)
+def move_base_callback(msg):
+    global robot_arrived
+    if msg.status_list and msg.status_list[-1].status == 3:  # 도착 (status == 3)
+        robot_arrived = True
+
+# 도착 대상자 정보 받기 (id_호출자 또는 id_수령인)
+def id_role_callback(msg):
+    global target_user_id, target_user_role
+    data = msg.data  # 예: "user1_receipient"
+    id,role = data.split(',') #예: 'user1' , 'receipient'
+    target_user_id = id
+    target_user_role = role
+
+def check_and_send_web_push():
+    global robot_arrived, target_user_id, target_user_role
+    while True:
+        with push_lock:
+            if robot_arrived and target_user_id:
+                if target_user_role == 'recipient':
+                    message = f"로봇이 도착했습니다! 물건을 수령하세요."
+                elif target_user_role == 'caller':
+                    message = f"로봇이 도착했습니다! 요청한 위치에 도착했습니다."
+
+                socketio.emit("web_push", {"title": "로봇 도착 알림", "message": message}, room=target_user_id)  # 특정 유저에게만 전송
+                rospy.loginfo(f"로봇 도착! {target_user_role}: {target_user_id}에게 웹 푸시 알림 전송")
+
+                robot_arrived = False  # 초기화
+            time.sleep(1)
+
+def signal_handler(sig, frame):
+    rospy.loginfo("종료 시그널 수신, ROS 노드 및 웹 서버 종료...")
+    rospy.signal_shutdown("Shutdown requested by signal handler")
+    socketio.stop()  # Flask 서버 종료
+
 # ROS spin을 위한 별도 스레드 함수
 def ros_spin():
     rospy.spin()  # spin을 통해 ROS 메시지 처리 대기
 
-# GUI 관련 작업을 위한 별도 스레드 함수 (예시로 time.sleep을 사용)
-def run_gui():
-    while True:
-        time.sleep(1)
-        print("Running GUI thread...")  # GUI 관련 코드로 대체
-
 # Flask 서버 실행을 위한 별도 스레드 함수
 def run_flask():
-    socketio.run(app, debug=True, use_reloader=False, host = '0.0.0.0', port = 5000)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
+    socketio.run(app, debug=True, use_reloader=False, ssl_context=('cert.pem', 'key.pem'), host = '0.0.0.0', port = 5000)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
+
+rospy.Subscriber("/move_base/status", GoalStatusArray, move_base_callback)
+rospy.Subscriber("/human_to_meet", String, id_role_callback)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
+    
     # 메인 스레드에서 rospy 노드 초기화
     rospy.init_node('robot_web_server_node', anonymous=True)  # 노드 초기화
+    
+    # 종료 시그널 처리 (Ctrl+C 또는 kill 명령어)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
+    #웹푸시 쓰레드 실행
+    threading.Thread(target=check_and_send_web_push, daemon=True).start()
+    
     # 로깅 재설정 (ROS 노드가 로깅을 덮어쓰는 문제 해결하기위해)
     logger.handlers = []  # 기존 핸들러 제거
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     
 
-    # 3개의 스레드 생성
+    # 2개의 스레드 생성
     flask_thread = threading.Thread(target=run_flask)
     ros_thread = threading.Thread(target=ros_spin)
-    gui_thread = threading.Thread(target=run_gui)
 
     def signal_handler(sig, frame):
         logger.info("프로그램이 종료되었습니다.")
@@ -234,9 +302,8 @@ if __name__ == '__main__':
     logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Flask web 서버가 실행됩니다!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!") 
     flask_thread.start()
     ros_thread.start()
-    gui_thread.start()
 
     # 스레드가 종료될 때까지 대기
     flask_thread.join()
     ros_thread.join()
-    gui_thread.join()
+

@@ -8,6 +8,9 @@ import actionlib
 import math
 from itertools import permutations
 from typing import List, Tuple, Optional
+from move_base_msgs.msg import MoveBaseActionResult
+import actionlib_msgs.msg
+
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
@@ -76,18 +79,19 @@ class DeliveryRobot:
     
     #"""서브스크라이버 초기화 메서드"""
     def _init_subscribers(self):
-        
         try:
             self.call_sub = rospy.Subscriber("/call_request", String, 
-                                           self.call_request_callback)
-            self.status_sub = rospy.Subscriber("/move_base/status", GoalStatusArray, 
-                                             self.status_callback)
+                                        self.call_request_callback)
+            # Replace status subscriber with result subscriber
+            self.move_base_result_sub = rospy.Subscriber("/move_base/result", 
+                                                        MoveBaseActionResult, 
+                                                        self.result_callback)
             self.amcl_pose_sub = rospy.Subscriber("/amcl_pose", 
-                                                 PoseWithCovarianceStamped, 
-                                                 self.amcl_pose_callback)
+                                                PoseWithCovarianceStamped, 
+                                                self.amcl_pose_callback)
             self.is_interacting_sub = rospy.Subscriber("/is_interacting_with_human", 
-                                                     String, 
-                                                     self.is_interacting_with_human_callback)
+                                                    String, 
+                                                    self.is_interacting_with_human_callback)
         except Exception as e:
             rospy.logerr(f"서브스크라이버 초기화 실패: {e}")
             raise
@@ -284,20 +288,16 @@ class DeliveryRobot:
         rospy.loginfo(f"이동 목표가 설정되었습니다: ({pos_x}, {pos_y})")
 
     # 이 콜백은 도착 정보에대한 로그만 남김
-    def status_callback(self, status: GoalStatusArray) -> None:
-        """이동 상태 업데이트 처리"""
-        if not status.status_list:
-            return
-            
-        latest_status = status.status_list[-1].status
-        if latest_status == 3:  # 성공
-            rospy.loginfo("status 3 을 받았습니다")
+    def result_callback(self, result: MoveBaseActionResult) -> None:
+        """이동 결과 처리"""
+        if result.status.status == actionlib_msgs.msg.GoalStatus.SUCCEEDED:
+            rospy.loginfo("목표 지점 도달 성공")
             self.waiting_for_interaction = True
             self.perform_action_at_destination()
-
-        '''elif latest_status == 4:  # 실패
-            rospy.logwarn("목표 도달 실패 - 재시도 중")
-            self._handle_goal_aborted() '''
+        elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
+                                    actionlib_msgs.msg.GoalStatus.REJECTED]:
+            rospy.logwarn("목표 도달 실패")
+            self._handle_goal_aborted()
 
     #"""실패한 네비게이션 처리"""
     def _handle_goal_aborted(self) -> None:

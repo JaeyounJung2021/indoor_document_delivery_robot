@@ -65,7 +65,8 @@ def initialize_database():
         ('user2', 'password2', 'seokkwon', 'Developing'),
         ('user3', 'password3', 'kyungbin', 'Marketing'),
         ('user4', 'password4', 'doyun', 'R&D'),
-        ('user5', 'password5', 'seoyun', 'R&D')
+        ('user5', 'password5', 'seoyun', 'R&D'),
+        ('user6', 'password6', 'dajeong', 'R&D')
     ]
 
     cursor.executemany('''
@@ -75,9 +76,9 @@ def initialize_database():
 
     # 부서 데이터 삽입
     departments = [
-        ('Developing', 1.0, 2.0, 0.0, 1.0),
-        ('Marketing', 3.0, 4.0, 0.0, 1.0),
-        ('R&D', 5.0, 6.0, 0.0, 1.0)
+        ('Developing', -0.4615437, -1.51862, -0.945, 0.3257),
+        ('Marketing', -1.2059, -0.5806, -0.9556, 0.294549),
+        ('R&D', -0.5508, 2.3226, 0.8810, 0.4730)
     ]
 
     cursor.executemany('''

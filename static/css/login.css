@@ -1,0 +1,23 @@
+.flash-messages {
+    position: fixed;       /* 화면 고정 위치 */
+    top: 20px;             /* 화면 상단에서 20px 아래 */
+    left: 50%;             /* 화면의 50% */
+    transform: translateX(-50%); /* 정확히 화면의 중앙에 위치하도록 */
+    z-index: 1000;         /* 다른 요소보다 위에 표시되도록 */
+    width: 300px;          /* 플래시 메시지의 너비 */
+    text-align: center;    /* 메시지 텍스트 중앙 정렬 */
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 16px;
+    display: none;         /* 기본적으로 안 보이도록 설정 */
+}
+
+.flash-messages .success {
+    background-color: #28a745;
+    color: white;
+}
+
+.flash-messages .error {
+    background-color: #dc3545;
+    color: white;
+}

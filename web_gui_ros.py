@@ -13,6 +13,8 @@ from move_base_msgs.msg import MoveBaseActionResult
 import logging
 import time
 from flask_socketio import SocketIO, emit
+import signal
+import sys
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -160,24 +162,22 @@ def register():
         password = request.form['register_password']
         name = request.form['register_name']
         department = request.form['register_dept']
-
         conn = get_db_connection()
         try:
             # employees 테이블에 사용자 정보 저장
             conn.execute('INSERT INTO employees (id, password, name, department) VALUES (?, ?, ?, ?)',
                          (username, password, name, department))
-
             # departments 테이블에서 좌표 정보 조회
             dept_info = conn.execute('SELECT pos_x, pos_y, ori_z, ori_w FROM departments WHERE department = ?',
                                     (department,)).fetchone()
-
+            rospy.loginfo("좌표 정보를 찾았습니다!!!!!!!!!!!!!!!!!")
             if dept_info:
-                # employee_with_coordinates 테이블에 정보 저장
+                # employee_with_coordinates 테이블에 정보저장
                 conn.execute('''
                     INSERT INTO employee_with_coordinates (name, department, pos_x, pos_y, ori_z, ori_w)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ''', (name, department, dept_info['pos_x'], dept_info['pos_y'], dept_info['ori_z'], dept_info['ori_w']))
-
+                rospy.loginfo("{} {} {}".format(name,department,dept_info['pos_x']))
                 conn.commit()
                 flash('회원가입이 완료되었습니다! 로그인해주세요.', 'success')
             else:
@@ -221,6 +221,14 @@ if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask)
     ros_thread = threading.Thread(target=ros_spin)
     gui_thread = threading.Thread(target=run_gui)
+
+    def signal_handler(sig, frame):
+        logger.info("프로그램이 종료되었습니다.")
+        # 여기에 필요한 추가 종료 처리를 할 수 있음
+        sys.exit(0)  # 프로그램을 종료
+
+    # SIGINT 시그널에 대해 signal_handler 함수를 등록
+    signal.signal(signal.SIGINT, signal_handler)
 
     # 스레드 시작
     logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Flask web 서버가 실행됩니다!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!") 

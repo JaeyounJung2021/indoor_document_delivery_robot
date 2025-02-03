@@ -6,6 +6,7 @@
     <title>Login</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
     <style>
         body {
             background-color: #f7f9fc;
@@ -28,6 +29,18 @@
     </style>
 </head>
 <body>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="flash-messages">
+            <ul>
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+{% endwith %}
+
     <div class="login-container">
         <h2 class="text-center">로그인</h2>
         <form method="POST">
@@ -70,7 +83,8 @@
             </form>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> <!--모달오픈때문에 dashboard.js참조-->
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script> <!--flash-->
 </body>
 </html>
 

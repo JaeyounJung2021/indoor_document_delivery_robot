@@ -61,7 +61,7 @@ class DeliveryRobot:
         self.event = threading.Event()
         
         # 액션 클라이언트 설정
-        ############################### self._setup_action_client()
+        self._setup_action_client()
         rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
 
     #"""퍼블리셔 초기화 메서드"""

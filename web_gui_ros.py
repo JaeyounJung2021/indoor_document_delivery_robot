@@ -158,7 +158,7 @@ def recipient_info():
         active_deliveries.append(delivery_info)
 
         # ROS 토픽으로 수령자 정보 발행
-        rospy.Publisher("/call_request", String, queue_size=10).publish(delivery_info)
+        pub_call_request.publish(delivery_info)
         rospy.loginfo("sent message to /call_request Topic")
         return redirect(url_for('dashboard'))
     
@@ -301,6 +301,7 @@ if __name__ == '__main__':
     # 스레드 시작
     logger.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Flask web 서버가 실행됩니다!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!") 
     flask_thread.start()
+    pub_call_request = rospy.Publisher("/call_request", String, queue_size=10)
     ros_thread.start()
 
     # 스레드가 종료될 때까지 대기

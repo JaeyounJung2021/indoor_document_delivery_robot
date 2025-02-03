@@ -260,7 +260,7 @@ class DeliveryRobot:
                 
                 self.event.clear()
                 # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
-                rospy.loginfo("로봇과 인간의 상호작용이 끝날때까지 대기,,,,,,,,,")
+                rospy.loginfo("로봇이 출발합니다,,,,,,")
                 self.event.wait()
                 
                 
@@ -295,9 +295,9 @@ class DeliveryRobot:
             self.waiting_for_interaction = True
             self.perform_action_at_destination()
 
-        elif latest_status == 4:  # 실패
+        '''elif latest_status == 4:  # 실패
             rospy.logwarn("목표 도달 실패 - 재시도 중")
-            self._handle_goal_aborted()
+            self._handle_goal_aborted() '''
 
     #"""실패한 네비게이션 처리"""
     def _handle_goal_aborted(self) -> None:

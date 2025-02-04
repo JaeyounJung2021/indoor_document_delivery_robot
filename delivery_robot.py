@@ -247,11 +247,12 @@ class DeliveryRobot:
         # Store the thread as an instance attribute
         self.route_thread = threading.Thread(target=self.execute_route, args=(route,))
         self.route_thread.start()
-        rospy.loginfo("경로 실행 스레드가 시작되었습니다.")
+        
 
     #route 에는 최적 경로로 판단된  perm이 들어감
     def execute_route(self, route: List[Tuple]) -> None:
         """배송 경로 실행"""
+        rospy.loginfo("경로 실행 스레드가 시작되었습니다.")
         self.executing_route = True
         try:
             for coord, point_type, delivery in route:
@@ -267,9 +268,11 @@ class DeliveryRobot:
                 # Publish the ID and point type of the person we're heading to
                 if point_type == "caller":
                     self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type}")
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.caller_id},{point_type} 보냈습니다" )
                 else:  # recipient
                     self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type}")
-
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.recipient_id},{point_type} 보냈습니다" )
+                
                 self.event.clear()
                 # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
                 rospy.loginfo("로봇이 출발합니다,,,,,,")

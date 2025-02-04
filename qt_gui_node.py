@@ -6,6 +6,8 @@ import rospy
 import subprocess  # 외부(여기서는 QT) 프로그램을 실행하고, 출력 및 에러를 처리.
 from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 
+# 수정
+
 # Qt GUI 실행 여부를 추적하는 변수
 gui_process1 = None
 gui_process2 = None
@@ -45,7 +47,7 @@ def test_gui_execution():
 
 def main():
     rospy.init_node('qt_gui_node', anonymous=True)
-    rospy.Subscriber('/move_base/status', GoalStatusArray, moving_status_callback)
+    rospy.Subscriber('/move_base/result', GoalStatusArray, moving_status_callback)
     # 테스트 모드에서는 토픽을 구독하는 대신 키 입력으로 테스트(추후 삭제)
     test_gui_execution()
     rospy.spin()

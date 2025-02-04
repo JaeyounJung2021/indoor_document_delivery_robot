@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-#!/usr/bin/env python
-
 import os
 import sys
 import sqlite3
@@ -10,6 +7,15 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QLineEdit, QPushButton,
     QMessageBox, QStackedWidget
 )
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+
+# ROS 초기화
+rospy.init_node('human_to_meet_listener', anonymous=True)
+
+# 📌 **전역 변수 (ROS 토픽으로 받은 사용자 정보 저장)**
+received_user_id = None
+received_role = None
 
 # 현재 실행 중인 스크립트(`qt_gui_path.py`)의 디렉토리를 가져옴
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,57 +23,89 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data", "company.db")
 print(f"[DEBUG] 데이터베이스 경로: {DB_PATH}")  # 경로가 올바른지 확인
 
+# 🌐 **ROS Subscriber - /human_to_meet 토픽 구독**
+def human_to_meet_callback(msg):
+    """ human_to_meet 토픽을 수신하고 전역 변수에 저장 """
+    global received_user_id, received_role
+    received_data = msg.data.strip()  # 예: "user1,caller"
+    if "," in received_data:
+        received_user_id, received_role = received_data.split(",")
+        rospy.loginfo(f"📡 수신된 사용자: {received_user_id}, 역할: {received_role}")
+    else:
+        rospy.logwarn("⚠️ 잘못된 데이터 형식: " + received_data)
+
+rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
+
+
 class SelectMethodScreen(QWidget):
-    """ Screen 1: Select RFID or Login """
+    """ Screen 1: RFID or Login 선택 화면 """
+
     def __init__(self, stacked_widget):
         super(SelectMethodScreen, self).__init__()
-        self.stacked_widget = stacked_widget  # Reference to switch screens
+        self.stacked_widget = stacked_widget
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
 
-        self.info_label = QLabel("Select Authentication Method:")
+        self.info_label = QLabel("🔑 인증 방법을 선택하세요:")
         layout.addWidget(self.info_label)
 
-        self.rfid_btn = QPushButton("Use RFID", self)
+        self.rfid_btn = QPushButton("🛂 RFID 사용", self)
         self.rfid_btn.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
         layout.addWidget(self.rfid_btn)
 
-        self.login_btn = QPushButton("Login with ID/Password", self)
+        self.login_btn = QPushButton("🔐 ID / Password 로그인", self)
         self.login_btn.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         layout.addWidget(self.login_btn)
 
         self.setLayout(layout)
 
+        """ 일정 시간이 지난 후 팝업 표시 (UI 렌더링 완료 후 실행) """
+        QTimer.singleShot(100, self.show_arrival_popup)  # 100ms(0.1초) 후 실행
+        
+    def show_arrival_popup(self):
+        """ arrived of start popup massage transmit """
+        QMessageBox.information(self, "✅ 도착", "로봇이 도착했습니다!")
+
+
 class RFIDScreen(QWidget):
-    """ Screen 2-1: RFID Authentication """
+    """ Screen 2-1: RFID 인증 화면 """
+
     def __init__(self, stacked_widget):
         super(RFIDScreen, self).__init__()
         self.stacked_widget = stacked_widget
-        self.rfid_id = None  # Store RFID ID
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
-        self.info_label = QLabel("Tap RFID Tag...")
+        self.info_label = QLabel("🛂 RFID 태그를 스캔하세요.")
         layout.addWidget(self.info_label)
 
-        self.rfid_btn = QPushButton("Simulate RFID Scan", self)
+        self.rfid_btn = QPushButton("🎫 RFID 스캔 시뮬레이션", self)
         self.rfid_btn.clicked.connect(self.simulate_rfid_scan)
         layout.addWidget(self.rfid_btn)
 
         self.setLayout(layout)
 
     def simulate_rfid_scan(self):
-        """ Simulate RFID scan """
-        self.rfid_id = "user1"  # Simulated ID (replace with real RFID input)
-        QMessageBox.information(self, "RFID Success", f"RFID Tagged: {self.rfid_id}")
-        self.stacked_widget.rfid_user = self.rfid_id  # Store globally
-        self.stacked_widget.setCurrentIndex(3)  # Go to verification screen
+        """ RFID 스캔 시뮬레이션 """
+        self.rfid_id = "user1"
+        self.stacked_widget.authenticated_user = self.rfid_id  # 가상의 RFID ID
+        self.verify_user()
+
+    def verify_user(self):
+        """ 인증한 사용자와 `/human_to_meet` 토픽의 ID 비교 """
+        if received_user_id and self.stacked_widget.authenticated_user == received_user_id:
+            QMessageBox.information(self, "✅ 인증 성공", "사용자 인증이 완료되었습니다!")
+            self.stacked_widget.setCurrentIndex(3)  # ArrivedScreen으로 이동
+        else:
+            QMessageBox.warning(self, "❌ 인증 실패", "RFID ID가 일치하지 않습니다.")
+
 
 class LoginScreen(QWidget):
-    """ Screen 2-2: User ID & Password Authentication """
+    """ Screen 2-2: ID & Password 로그인 화면 """
+
     def __init__(self, stacked_widget):
         super(LoginScreen, self).__init__()
         self.stacked_widget = stacked_widget
@@ -75,8 +113,7 @@ class LoginScreen(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout()
-
-        self.info_label = QLabel("Enter ID & Password:")
+        self.info_label = QLabel("👤 ID와 비밀번호를 입력하세요.")
         layout.addWidget(self.info_label)
 
         self.id_input = QLineEdit(self)
@@ -85,24 +122,30 @@ class LoginScreen(QWidget):
 
         self.pw_input = QLineEdit(self)
         self.pw_input.setPlaceholderText("Password")
-        self.pw_input.setEchoMode(QLineEdit.Password)  # Hide password
+        self.pw_input.setEchoMode(QLineEdit.Password)  # 비밀번호 숨김
         layout.addWidget(self.pw_input)
 
-        self.login_btn = QPushButton("Login", self)
+        self.login_btn = QPushButton("🔑 로그인", self)
         self.login_btn.clicked.connect(self.verify_login)
         layout.addWidget(self.login_btn)
 
         self.setLayout(layout)
 
     def verify_login(self):
-        """ Check ID & Password, then move to verification screen """
+        """ ID & Password 확인 후 `/human_to_meet` ID와 비교 """
         user_id = self.id_input.text().strip()
         password = self.pw_input.text().strip()
 
+        #check login information
         if self.authenticate_user(user_id, password):
             QMessageBox.information(self, "Login Success", "Authentication Complete!")
             self.stacked_widget.rfid_user = user_id  # Store globally
-            self.stacked_widget.setCurrentIndex(3)  # Move to verification
+            if received_user_id and user_id == received_user_id:
+                QMessageBox.information(self, "✅ 인증 성공", "사용자 인증이 완료되었습니다!")
+                self.stacked_widget.authenticated_user = user_id
+                self.stacked_widget.setCurrentIndex(3)  # ArrivedScreen으로 이동
+            else:
+                QMessageBox.warning(self, "❌ 인증 실패", "ID가 일치하지 않습니다.")
         else:
             QMessageBox.warning(self, "Login Failed", "Invalid ID or Password.")
 
@@ -117,50 +160,62 @@ class LoginScreen(QWidget):
         conn.close()
         return user is not None  # Return True if user exists
 
-class VerificationScreen(QWidget):
-    """ Screen 3: Wait for Robot & Verify ID via ROS """
+class ArrivedScreen(QWidget):
+    """ 📦 Arrived 화면: caller / recipient 역할 확인 후 UI 표시 """
+
     def __init__(self, stacked_widget):
-        super(VerificationScreen, self).__init__()
+        super(ArrivedScreen, self).__init__()
         self.stacked_widget = stacked_widget
         self.initUI()
-        rospy.init_node('auth_verification_node', anonymous=True)
-        rospy.Subscriber('/human_to_meet', String, self.check_user_auth)
 
     def initUI(self):
-        layout = QVBoxLayout()
-        self.info_label = QLabel("Waiting for Robot...")
-        layout.addWidget(self.info_label)
-        self.setLayout(layout)
+        self.layout = QVBoxLayout()
+        self.instruction_label = QLabel("🔄 역할 확인 중...")
+        self.layout.addWidget(self.instruction_label)
+        self.setLayout(self.layout)
+        QTimer.singleShot(100, self.update_role)  # 100ms 후 실행
 
-    def check_user_auth(self, msg):
-        """ Check if the user ID from ROS matches the authenticated user """
-        received_data = msg.data.strip()  # Example: "user1,caller"
-        user_id, _ = received_data.split(",")  # Extract "user1"
-
-        if self.stacked_widget.rfid_user and self.stacked_widget.rfid_user == user_id:
-            rospy.loginfo("User Verified! Moving to Arrival Screen.")
-            self.run_arrived_gui()
+    def update_role(self):
+        """ `received_role`을 기반으로 UI 업데이트 """
+        if received_role == "caller":
+            self.setup_caller_ui()
+        elif received_role == "recipient":
+            self.setup_recipient_ui()
         else:
-            QMessageBox.warning(self, "Verification Failed", "Unauthorized Access!")
+            QMessageBox.warning(self, "❌ 오류", "역할 정보가 없습니다.")
 
-    def run_arrived_gui(self):
-        """ Run qt_gui_arrived.py """
-        import subprocess
-        subprocess.Popen(["python3", "qt_gui_arrived.py"])  # Execute arrival screen
-        self.close()  # Close current GUI
+    def setup_caller_ui(self):
+        """ 📦 Caller UI 설정 """
+        self.instruction_label.setText("📦 서랍에 문서를 적재하세요.")
+        self.complete_btn = QPushButton("✅ 완료", self)
+        self.complete_btn.clicked.connect(self.show_popup)
+        self.layout.addWidget(self.complete_btn)
+
+    def setup_recipient_ui(self):
+        """ 📥 Recipient UI 설정 """
+        self.instruction_label.setText("📥 서랍에서 문서를 꺼내세요.")
+        self.pickup_btn = QPushButton("📤 픽업", self)
+        self.pickup_btn.clicked.connect(self.show_popup)
+        self.layout.addWidget(self.pickup_btn)
+
+    def show_popup(self):
+        """ ✅ 작업 완료 메시지 """
+        QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다.")
+        rospy.Publisher('/is_interacting_with_human_done', String, queue_size=10).publish("done")
+        self.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     stacked_widget = QStackedWidget()
-    stacked_widget.rfid_user = None  # Store authenticated user globally
+    stacked_widget.authenticated_user = None  # 인증된 사용자 저장
 
-    # Adding screens
     stacked_widget.addWidget(SelectMethodScreen(stacked_widget))  # Screen 1
     stacked_widget.addWidget(RFIDScreen(stacked_widget))  # Screen 2-1
     stacked_widget.addWidget(LoginScreen(stacked_widget))  # Screen 2-2
-    stacked_widget.addWidget(VerificationScreen(stacked_widget))  # Screen 3
+    stacked_widget.addWidget(ArrivedScreen(stacked_widget))  # Screen 3
 
-    stacked_widget.setCurrentIndex(0)  # Start with Selection Screen
+    stacked_widget.setCurrentIndex(0)  # 첫 화면
     stacked_widget.showFullScreen()
 
     sys.exit(app.exec_())

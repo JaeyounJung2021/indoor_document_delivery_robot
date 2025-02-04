@@ -226,6 +226,7 @@ def move_base_callback(msg):
     global robot_arrived, prior_state
     if msg.status_list and msg.status_list[-1].status == 3 and prior_state != 3:  # 도착 (status == 3)
         robot_arrived = True
+        prior_state = 3
     elif msg.status_list and msg.status_list[-1].status != 3:
         prior_state = 100
         

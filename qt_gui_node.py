@@ -6,6 +6,8 @@ import rospy
 import subprocess  # 외부(여기서는 QT) 프로그램을 실행하고, 출력 및 에러를 처리.
 from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 
+# 수정
+
 # Qt GUI 실행 여부를 추적하는 변수
 gui_process1 = None
 gui_process2 = None

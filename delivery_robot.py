@@ -73,6 +73,7 @@ class DeliveryRobot:
         try:
             self.pub_goal = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
             self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
+            self.human_to_meet_pub = rospy.Publisher("/human_to_meet", String, queue_size=10)
         except Exception as e:
             rospy.logerr(f"퍼블리셔 초기화 실패: {e}")
             raise
@@ -263,12 +264,18 @@ class DeliveryRobot:
                 rospy.loginfo(f"{point_type} 위치로 이동 중: {coord}")
                 self.move_command(*coord)
                 
+                # Publish the ID and point type of the person we're heading to
+                if point_type == "caller":
+                    self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type}")
+                else:  # recipient
+                    self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type}")
+
                 self.event.clear()
                 # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
                 rospy.loginfo("로봇이 출발합니다,,,,,,")
                 self.event.wait()
-                
-                
+                    
+                    
         except Exception as e:
             rospy.logerr(f"경로 실행 중 오류 발생: {e}")
         finally:
@@ -276,16 +283,16 @@ class DeliveryRobot:
             self.route_thread_flag = False
 
     def move_command(self, pos_x: float, pos_y: float, ori_z: float = 0.0, ori_w: float = 1.0):
-        """로봇 이동 명령 전송"""
-        goal = MoveBaseGoal()
-        goal.target_pose.header.stamp = rospy.Time.now()
-        goal.target_pose.header.frame_id = 'map'
-        goal.target_pose.pose.position.x = pos_x
-        goal.target_pose.pose.position.y = pos_y
-        goal.target_pose.pose.orientation.z = ori_z
-        goal.target_pose.pose.orientation.w = ori_w
+        """로봇 이동 명령 전송 (토픽 기반)"""
+        goal = PoseStamped()
+        goal.header.stamp = rospy.Time.now()
+        goal.header.frame_id = 'map'
+        goal.pose.position.x = pos_x
+        goal.pose.position.y = pos_y
+        goal.pose.orientation.z = ori_z
+        goal.pose.orientation.w = ori_w
         
-        self.move_base_client.send_goal(goal)
+        self.pub_goal.publish(goal)
         rospy.loginfo(f"이동 목표가 설정되었습니다: ({pos_x}, {pos_y})")
 
     # 이 콜백은 도착 정보에대한 로그만 남김

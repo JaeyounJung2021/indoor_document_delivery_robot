@@ -325,6 +325,7 @@ class DeliveryRobot:
                     rospy.loginfo(f"{delivery.recipient_name}님이 로봇에 성공적으로 물건을 수령하였습니다!")
                     rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
                     self.deliveries.remove(delivery)
+                    rospy.loginfo("완료된 배송을 지웠습니다,,,")
 
             # 상호작용 대기 상태 해제
             self.waiting_for_interaction = False
@@ -342,7 +343,7 @@ class DeliveryRobot:
             #대기중에 들어온 요청이 없다면 execute_route() 실행하던 스레드에게 동작 재개 신호 보냄
 
 
-    def _is_close(self, pos1, pos2, threshold=0.5):
+    def _is_close(self, pos1, pos2, threshold=2):
         """두 점이 가까운지 확인하는 함수"""
         distance = math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
         return distance < threshold

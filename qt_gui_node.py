@@ -10,9 +10,6 @@ from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 gui_process1 = None
 gui_process2 = None
 
-
-#ddddddddddddddddd
-
 def moving_status_callback(msg):
     global gui_process1, gui_process2
     if msg.status_list:  # 상태 리스트가 비어있지 않을때만 처리

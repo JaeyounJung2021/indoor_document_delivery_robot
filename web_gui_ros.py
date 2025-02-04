@@ -27,6 +27,7 @@ connected_clients = {}
 robot_arrived = False
 target_user_id = None
 target_user_role = None
+prior_state = 100
 
 #자원경쟁 방지를 위한 쓰레드락
 push_lock = threading.Lock()
@@ -222,10 +223,13 @@ def handle_disconnect():
 
 #move_base/status 콜백 (로봇 도착 확인)
 def move_base_callback(msg):
-    global robot_arrived
-    if msg.status_list and msg.status_list[-1].status == 3:  # 도착 (status == 3)
+    global robot_arrived, prior_state
+    if msg.status_list and msg.status_list[-1].status == 3 and prior_state != 3:  # 도착 (status == 3)
         robot_arrived = True
-
+        prior_state = 3
+    elif msg.status_list and msg.status_list[-1].status != 3:
+        prior_state = 100
+        
 # 도착 대상자 정보 받기 (id_호출자 또는 id_수령인)
 def id_role_callback(msg):
     global target_user_id, target_user_role

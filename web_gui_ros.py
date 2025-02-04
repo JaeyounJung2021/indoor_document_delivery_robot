@@ -221,7 +221,7 @@ def handle_disconnect():
         leave_room(user_id)
         rospy.loginfo(f"{user_id} 접속 해제 (SID: {sid})")
 
-#move_base/status 콜백 (로봇 도착 확인)
+#move_base/status 콜백 (로봇 도착 확인)#############됨 확인해봤음!!!! 한번만 보냄!!!!!!!!!
 def move_base_callback(msg):
     global robot_arrived, prior_state
     if msg.status_list and msg.status_list[-1].status == 3 and prior_state != 3:  # 도착 (status == 3)

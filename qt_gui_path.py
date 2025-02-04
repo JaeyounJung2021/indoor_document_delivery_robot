@@ -183,6 +183,7 @@ class ArrivedScreen(QWidget):
             self.setup_recipient_ui()
         else:
             QMessageBox.warning(self, "❌ 오류", "역할 정보가 없습니다.")
+            rospy.loginfo(f"errrrrrrrrror")
 
     def setup_caller_ui(self):
         """ 📦 Caller UI 설정 """

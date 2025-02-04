@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QLineEdit, QPushButton,
     QMessageBox, QStackedWidget
 )
+from PyQt5.QtCore import QTimer
 
 # 현재 실행 중인 스크립트(`qt_gui_path.py`)의 디렉토리를 가져옴
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +40,13 @@ class SelectMethodScreen(QWidget):
         layout.addWidget(self.login_btn)
 
         self.setLayout(layout)
+
+        """ 일정 시간이 지난 후 팝업 표시 (UI 렌더링 완료 후 실행) """
+        QTimer.singleShot(100, self.show_arrival_popup)  # 500ms(0.5초) 후 실행
+    
+    def show_arrival_popup(self):
+        """ arrived of start popup massage transmit """
+        QMessageBox.information(self, "✅ 도착", "로봇이 도착했습니다!")
 
 class RFIDScreen(QWidget):
     """ Screen 2-1: RFID Authentication """

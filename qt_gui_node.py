@@ -10,6 +10,9 @@ from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 gui_process1 = None
 gui_process2 = None
 
+
+#ddddddddddddddddd
+
 def moving_status_callback(msg):
     global gui_process1, gui_process2
     if msg.status_list:  # 상태 리스트가 비어있지 않을때만 처리
@@ -45,7 +48,7 @@ def test_gui_execution():
 
 def main():
     rospy.init_node('qt_gui_node', anonymous=True)
-    rospy.Subscriber('/move_base/status', GoalStatusArray, moving_status_callback)
+    rospy.Subscriber('/move_base/result', GoalStatusArray, moving_status_callback)
     # 테스트 모드에서는 토픽을 구독하는 대신 키 입력으로 테스트(추후 삭제)
     test_gui_execution()
     rospy.spin()

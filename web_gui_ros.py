@@ -220,10 +220,11 @@ def handle_disconnect():
         leave_room(user_id)
         rospy.loginfo(f"{user_id} 접속 해제 (SID: {sid})")
 
-#move_base/status 콜백 (로봇 도착 확인)
+#move_base/result 콜백 (로봇 도착 확인)
 def move_base_callback(msg):
     global robot_arrived
-    if msg.status_list and msg.status_list[-1].status == 3:  # 도착 (status == 3)
+    if  msg.status.status== 3:  # 도착 (status == 3)
+        rospy.loginfo("로봇이 목적지에 도착했습니다!")
         robot_arrived = True
 
 # 도착 대상자 정보 받기 (id_호출자 또는 id_수령인)
@@ -263,7 +264,7 @@ def ros_spin():
 def run_flask():
     socketio.run(app, debug=True, use_reloader=False, ssl_context=('cert.pem', 'key.pem'), host = '0.0.0.0', port = 5000)  # use_reloader=False는 Flask가 중복으로 실행되지 않도록 방지
 
-rospy.Subscriber("/move_base/status", GoalStatusArray, move_base_callback)
+rospy.Subscriber("/move_base/result", MoveBaseActionResult, move_base_callback)
 rospy.Subscriber("/human_to_meet", String, id_role_callback)
 
 if __name__ == '__main__':

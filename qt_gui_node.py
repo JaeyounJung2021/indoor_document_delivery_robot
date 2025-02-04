@@ -22,6 +22,7 @@ def status_callback(msg):
 
     if last_status == 3:  # SUCCEEDED
         rospy.loginfo("Goal reached successfully!")
+        rospy.loginfo(f"is_gui2_running : {is_gui2_running}")
         if not is_gui2_running:
             if gui_process1:  # 기존의 gui_process1 종료
                 gui_process1.terminate()
@@ -44,7 +45,7 @@ def status_callback(msg):
         rospy.loginfo(f"Current status: {last_status}")
 
 def main():
-    rospy.init_node('move_base_status_listener', anonymous=True)
+    rospy.init_node('qt_gui_node', anonymous=True)
     rospy.Subscriber("/move_base/status", GoalStatusArray, status_callback)
     rospy.spin()
 

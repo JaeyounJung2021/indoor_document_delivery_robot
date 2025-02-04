@@ -10,9 +10,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 
-# ROS 초기화
-rospy.init_node('human_to_meet_listener', anonymous=True)
-
 # 📌 **전역 변수 (ROS 토픽으로 받은 사용자 정보 저장)**
 received_user_id = None
 received_role = None
@@ -167,23 +164,28 @@ class ArrivedScreen(QWidget):
         super(ArrivedScreen, self).__init__()
         self.stacked_widget = stacked_widget
         self.initUI()
+        self.check_role_timer = QTimer(self)
+        self.check_role_timer.timeout.connect(self.update_role)
+        self.check_role_timer.start(1000)  # 1000ms마다 역할 확인
 
     def initUI(self):
         self.layout = QVBoxLayout()
         self.instruction_label = QLabel("🔄 역할 확인 중...")
         self.layout.addWidget(self.instruction_label)
         self.setLayout(self.layout)
-        QTimer.singleShot(100, self.update_role)  # 100ms 후 실행
 
     def update_role(self):
         """ `received_role`을 기반으로 UI 업데이트 """
         if received_role == "caller":
             self.setup_caller_ui()
+            self.check_role_timer.stop()  # 역할이 확인되면 타이머 중지
         elif received_role == "recipient":
             self.setup_recipient_ui()
+            self.check_role_timer.stop()  # 역할이 확인되면 타이머 중지
         else:
-            QMessageBox.warning(self, "❌ 오류", "역할 정보가 없습니다.")
+            QTimer.singleShot(1000, lambda: QMessageBox.warning(self, "❌ 오류", "역할 정보가 없습니다."))
             rospy.loginfo(f"errrrrrrrrror")
+            self.check_role_timer.stop()  # 역할이 확인되면 타이머 중지
 
     def setup_caller_ui(self):
         """ 📦 Caller UI 설정 """
@@ -201,15 +203,21 @@ class ArrivedScreen(QWidget):
 
     def show_popup(self):
         """ ✅ 작업 완료 메시지 """
-        QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다.")
-        rospy.Publisher('/is_interacting_with_human_done', String, queue_size=10).publish("done")
+        QTimer.singleShot(100, lambda: QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다."))
+        self.stacked_widget.publisher.publish("done")
         self.close()
 
 
 if __name__ == "__main__":
+    # ROS 초기화
+    rospy.init_node('qt_gui_path', anonymous=True)
+    
     app = QApplication(sys.argv)
     stacked_widget = QStackedWidget()
     stacked_widget.authenticated_user = None  # 인증된 사용자 저장
+
+    stacked_widget.publisher = rospy.Publisher('/is_interacting_with_human_done', String, queue_size = 10)
+    human_to_meet_sub = rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
 
     stacked_widget.addWidget(SelectMethodScreen(stacked_widget))  # Screen 1
     stacked_widget.addWidget(RFIDScreen(stacked_widget))  # Screen 2-1

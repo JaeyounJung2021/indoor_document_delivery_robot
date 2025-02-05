@@ -202,7 +202,7 @@ class ArrivedScreen(QWidget):
     def show_popup(self):
         """ ✅ 작업 완료 메시지 """
         QTimer.singleShot(100, lambda: QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다."))
-        is_interacting_with_human_done_pub.publish("done")
+        QTimer.singleShot(10, lambda: is_interacting_with_human_done_pub.publish("done"))
         self.close()
 
 

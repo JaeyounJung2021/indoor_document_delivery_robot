@@ -134,7 +134,6 @@ class LoginScreen(QWidget):
         #check login information
         if self.authenticate_user(user_id, password):
             QMessageBox.information(self, "Login Success", "Authentication Complete!")
-            self.stacked_widget.rfid_user = user_id  # Store globally
             if received_user_id and user_id == received_user_id:
                 QMessageBox.information(self, "✅ 인증 성공", "사용자 인증이 완료되었습니다!")
                 self.stacked_widget.authenticated_user = user_id
@@ -203,7 +202,7 @@ class ArrivedScreen(QWidget):
     def show_popup(self):
         """ ✅ 작업 완료 메시지 """
         QTimer.singleShot(100, lambda: QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다."))
-        self.stacked_widget.publisher.publish("done")
+        is_interacting_with_human_done_pub.publish("done")
         self.close()
 
 
@@ -215,7 +214,7 @@ if __name__ == "__main__":
     stacked_widget = QStackedWidget()
     stacked_widget.authenticated_user = None  # 인증된 사용자 저장
 
-    stacked_widget.publisher = rospy.Publisher('/is_interacting_with_human_done', String, queue_size = 10)
+    is_interacting_with_human_done_pub = rospy.Publisher('/is_interacting_with_human_done', String, queue_size = 10)
     human_to_meet_sub = rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
 
     stacked_widget.addWidget(SelectMethodScreen(stacked_widget))  # Screen 1

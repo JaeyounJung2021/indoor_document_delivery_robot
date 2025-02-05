@@ -200,12 +200,11 @@ class ArrivedScreen(QWidget):
         self.pickup_btn.clicked.connect(self.show_popup)
         self.layout.addWidget(self.pickup_btn)
 
-    def show_popup(self):
-        """ ✅ 작업 완료 메시지 """
+    def show_popup(self): #적재 작업이 끝났을때 human to meet으로 쇼부 치자자
+        """ ✅ 적재 작업 완료 메시지 """
         QTimer.singleShot(100, lambda: QMessageBox.information(self, "✅ 완료", "작업이 완료되었습니다."))
         self.stacked_widget.publisher.publish("done")
         self.close()
-
 
 if __name__ == "__main__":
     # ROS 초기화

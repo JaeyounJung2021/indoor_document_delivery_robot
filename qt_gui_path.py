@@ -214,7 +214,7 @@ if __name__ == "__main__":
     stacked_widget = QStackedWidget()
     stacked_widget.authenticated_user = None  # 인증된 사용자 저장
 
-    is_interacting_with_human_done_pub = rospy.Publisher('/is_interacting_with_human_done', String, queue_size = 10)
+    is_interacting_with_human_done_pub = rospy.Publisher('/is_interacting_with_human', String, queue_size = 10)
     human_to_meet_sub = rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
 
     stacked_widget.addWidget(SelectMethodScreen(stacked_widget))  # Screen 1

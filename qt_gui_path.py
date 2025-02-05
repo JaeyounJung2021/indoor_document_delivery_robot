@@ -175,6 +175,7 @@ class ArrivedScreen(QWidget):
         self.setLayout(self.layout)
 
     def update_role(self):
+        global received_role
         """ `received_role`을 기반으로 UI 업데이트 """
         if received_role == "caller":
             self.setup_caller_ui()
@@ -184,7 +185,8 @@ class ArrivedScreen(QWidget):
             self.check_role_timer.stop()  # 역할이 확인되면 타이머 중지
         else:
             QTimer.singleShot(1000, lambda: QMessageBox.warning(self, "❌ 오류", "역할 정보가 없습니다."))
-            rospy.loginfo(f"errrrrrrrrror")
+            rospy.loginfo(f"errrrrrrrrror!!!!!!!!!!!!!!!!!!!!!!!시발 당장 이석권 불러 치명적인 페이탈 에러야")
+            self.check_role_timer.stop()
 
     def setup_caller_ui(self):
         """ 📦 Caller UI 설정 """

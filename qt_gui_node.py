@@ -21,8 +21,8 @@ def status_callback(msg):
     last_status = msg.status_list[-1].status
 
     if last_status == 3:  # SUCCEEDED
-        rospy.loginfo("Goal reached successfully!")
-        rospy.loginfo(f"is_gui2_running : {is_gui2_running}")
+        #rospy.loginfo("Goal reached successfully!")
+        #rospy.loginfo(f"is_gui2_running : {is_gui2_running}")
         if not is_gui2_running:
             if gui_process1:  # 기존의 gui_process1 종료
                 gui_process1.terminate()
@@ -32,7 +32,7 @@ def status_callback(msg):
             gui_process2 = subprocess.Popen(["python3", "qt_gui_path.py"])
             is_gui2_running = True
     elif last_status == 1:  # ACTIVE
-        rospy.loginfo("Navigation in progress...")
+        #rospy.loginfo("Navigation in progress...")
         if not is_gui1_running:
             if gui_process2:  # 기존의 gui_process2 종료
                 gui_process2.terminate()
@@ -42,7 +42,8 @@ def status_callback(msg):
             gui_process1 = subprocess.Popen(["python3", "qt_gui_moving.py"])  # PyQt5는 python3으로 실행
             is_gui1_running = True
     else:
-        rospy.loginfo(f"Current status: {last_status}")
+        pass
+        #rospy.loginfo(f"Current status: {last_status}")
 
 def main():
     rospy.init_node('move_base_status_listener', anonymous=True)

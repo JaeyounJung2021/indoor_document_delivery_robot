@@ -22,6 +22,7 @@ def status_callback(msg):
 
     if last_status == 3:  # SUCCEEDED
         rospy.loginfo("Goal reached successfully!")
+        rospy.loginfo(f"is_gui2_running : {is_gui2_running}")
         if not is_gui2_running:
             if gui_process1:  # 기존의 gui_process1 종료
                 gui_process1.terminate()

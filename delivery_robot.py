@@ -277,6 +277,7 @@ class DeliveryRobot:
                 # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
                 rospy.loginfo("로봇이 출발합니다,,,,,,")
                 self.event.wait()
+            rospy.loginfo("경로 실행 서브스레드가 죽습니다,,,,,,")
                     
                     
         except Exception as e:
@@ -333,7 +334,7 @@ class DeliveryRobot:
                     delivery.picked_up = True
                 elif self._is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
                     rospy.loginfo(f"{delivery.recipient_name}님이 로봇에 성공적으로 물건을 수령하였습니다!")
-                    rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
+                    rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}부서의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}부서의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
                     self.deliveries.remove(delivery)
                     rospy.loginfo("완료된 배송을 지웠습니다,,,")
 

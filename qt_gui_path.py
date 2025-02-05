@@ -24,6 +24,7 @@ print(f"[DEBUG] 데이터베이스 경로: {DB_PATH}")  # 경로가 올바른지
 def human_to_meet_callback(msg):
     """ human_to_meet 토픽을 수신하고 전역 변수에 저장 """
     global received_user_id, received_role
+    rospy.loginfo("씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발")
     received_data = msg.data.strip()  # 예: "user1,caller"
     if "," in received_data:
         received_user_id, received_role = received_data.split(",")

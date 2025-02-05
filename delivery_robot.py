@@ -77,7 +77,7 @@ class DeliveryRobot:
         try:
             self.pub_goal = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
             self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
-            self.human_to_meet_pub = rospy.Publisher("/human_to_meet", String, queue_size=10)
+            self.human_to_meet_pub = rospy.Publisher("/human_to_meet", String, latch = True, queue_size=10)
         except Exception as e:
             rospy.logerr(f"퍼블리셔 초기화 실패: {e}")
             raise

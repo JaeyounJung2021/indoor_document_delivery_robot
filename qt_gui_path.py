@@ -32,9 +32,6 @@ def human_to_meet_callback(msg):
     else:
         rospy.logwarn("⚠️ 잘못된 데이터 형식: " + received_data)
 
-rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
-
-
 class SelectMethodScreen(QWidget):
     """ Screen 1: RFID or Login 선택 화면 """
 

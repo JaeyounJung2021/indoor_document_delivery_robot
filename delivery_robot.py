@@ -28,6 +28,7 @@ class Delivery:
         self.recipient_coord = recipient_coord
         self.recipient_id = recipient_id
         self.picked_up = False
+        
     
     #'->' 는 '타입 힌트'라는 파이썬 문법으로, 이 함수가 반환하는 데이터의 타입이 str임을 알려줌
     #객체 생성될때 자동으로 호출됨
@@ -61,11 +62,14 @@ class DeliveryRobot:
         self.waiting_for_interaction = False
         # 대기 중에 들어온 새로운 요청을 표시하는 플래그
         self.has_pending_requests = False
+        # 오늘의 배송 완료 건수 (누적) 나타내는 변수
+        self.today_delivery = 0
         self.event = threading.Event()
         
         # 액션 클라이언트 설정
         self._setup_action_client()
         rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
+
 
     #"""퍼블리셔 초기화 메서드"""
     def _init_publishers(self):
@@ -192,7 +196,7 @@ class DeliveryRobot:
         
         # 서브스레드가 execute_route()를 지금 실행중이라면 액션 서버와 통신하여 기존의 서브스레드에 의한 goal 취소함
         if self.executing_route:
-            rospy.loginfo("현재 경로를 취소하고 새로운 경로로 변경합니다.")
+            rospy.loginfo(f"현재 경로를 취소하고, 재계산된 새로운 최적 경로로 변경합니다.현재 남은 배달 건수: {len(self.deliveries)}")
             ##기존의 목표 좌표 취소
             self.move_base_client.cancel_all_goals()
             #서브스레드가 죽을 타이밍이라고 설정
@@ -306,21 +310,21 @@ class DeliveryRobot:
             rospy.loginfo("목표 지점 도달 성공")
             self.waiting_for_interaction = True
             self.perform_action_at_destination()
-        '''elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
+        elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
                                     actionlib_msgs.msg.GoalStatus.REJECTED]:
             rospy.logwarn("목표 도달 실패")
-            self._handle_goal_aborted()'''
+            self._handle_goal_aborted()
 
-    #"""실패한 네비게이션 처리"""
+    
     def _handle_goal_aborted(self) -> None:
         
         retry_count = getattr(self, '_retry_count', 0)
-        if retry_count < 3:
+        if retry_count < 10:
             self._retry_count = retry_count + 1
-            rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/3)")
+            rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/10)")
             self.move_command(*self.current_goal.pose.position)
         else:
-            rospy.logerr("3회 시도 후 네비게이션 실패,,,,,,관리자에게 연락합니다")
+            rospy.logerr("10회 시도 후 네비게이션 실패,,,,,,관리자에게 연락합니다")
             self._retry_count = 0
             
 
@@ -337,6 +341,8 @@ class DeliveryRobot:
                     rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}부서의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}부서의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
                     self.deliveries.remove(delivery)
                     rospy.loginfo("완료된 배송을 지웠습니다,,,")
+                    self.today_delivery+=1
+                    rospy.loginfo(f"오늘의 배송 완료 건수: {self.today_delivery}건")
 
             # 상호작용 대기 상태 해제
             self.waiting_for_interaction = False

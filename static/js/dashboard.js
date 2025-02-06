@@ -20,7 +20,6 @@ function openModal() {
 // 로봇 위치 조회 팝업 열기
 function openLocationModal() {
     document.getElementById("locationModal").style.display = "flex";
-    startPathUpdating();  // 로봇 위치 조회 팝업이 열리면 경로 업데이트 시작
 }
 
 // 회원가입 팝업 열기
@@ -105,8 +104,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     odomListener.subscribe(function (message) {
-        var x = message.pose.pose.position.x * scale + canvas.width / 2;
-        var y = -message.pose.pose.position.y * scale + canvas.height / 2; // Y 좌표 반전(HTML5 canvas는 아래로 증가)
+        var x = -message.pose.pose.position.y * scale + canvas.width / 2;
+        var y = -message.pose.pose.position.x * scale + canvas.height / 2; // Y 좌표 반전(HTML5 canvas는 아래로 증가)
 
         robotPath.push({ x, y });
 
@@ -125,8 +124,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     goalListener.subscribe(function (message) {
-        var x = message.pose.position.x * scale + canvas.width / 2;
-        var y = -message.pose.position.y * scale + canvas.height / 2;
+        var x = -message.pose.position.y * scale + canvas.width / 2;
+        var y = -message.pose.position.x * scale + canvas.height / 2;
 
         goalPosition = { x, y };
         drawCanvas();

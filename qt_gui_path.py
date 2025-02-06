@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QStackedWidget
 )
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal
 
 # 📌 **전역 변수 (ROS 토픽으로 받은 사용자 정보 저장)**
 received_user_id = None
@@ -27,7 +27,7 @@ def human_to_meet_callback(msg):
     rospy.loginfo("씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발씨발발")
     received_data = msg.data.strip()  # 예: "user1,caller"
     if "," in received_data:
-        received_user_id, received_role = received_data.split(",")
+        received_user_id, received_role,_,_ = received_data.split(",")
         rospy.loginfo(f"📡 수신된 사용자: {received_user_id}, 역할: {received_role}")
     else:
         rospy.logwarn("⚠️ 잘못된 데이터 형식: " + received_data)
@@ -64,6 +64,21 @@ class SelectMethodScreen(QWidget):
         QMessageBox.information(self, "✅ 도착", "로봇이 도착했습니다!")
 
 
+#qt와 비동기적으로 ROS콜백 실행
+class ROSSubscriberThread(QThread):
+    """ROS 구독자를 실행하는 별도의 스레드"""
+    auth_result_received = pyqtSignal(str)
+
+    def run(self):
+        rospy.init_node('rfid_auth_subscriber', anonymous=True)
+        rospy.Subscriber('/rfid_auth_result', String, self.callback)
+        rospy.spin()
+
+    def callback(self, msg):
+        """RFID 인증 결과 처리"""
+        self.auth_result_received.emit(msg.data)  # 받은 메시지를 Qt GUI로 전달
+
+
 class RFIDScreen(QWidget):
     """ Screen 2-1: RFID 인증 화면 """
 
@@ -71,31 +86,27 @@ class RFIDScreen(QWidget):
         super(RFIDScreen, self).__init__()
         self.stacked_widget = stacked_widget
         self.initUI()
+        
+        rfid_auth_request_pub.publish("RequestArrived") #ESP8266으로 RFID인증요청 토픽 전송
+
+        # ROS Subscriber 시작
+        self.subscriber_thread = ROSSubscriberThread()
+        self.subscriber_thread.auth_result_received.connect(self.handle_auth_result)  # 인증 결과 처리 시그널 연결
+        self.subscriber_thread.start()
 
     def initUI(self):
         layout = QVBoxLayout()
         self.info_label = QLabel("🛂 RFID 태그를 스캔하세요.")
         layout.addWidget(self.info_label)
-
-        self.rfid_btn = QPushButton("🎫 RFID 스캔 시뮬레이션", self)
-        self.rfid_btn.clicked.connect(self.simulate_rfid_scan)
-        layout.addWidget(self.rfid_btn)
-
         self.setLayout(layout)
 
-    def simulate_rfid_scan(self):
-        """ RFID 스캔 시뮬레이션 """
-        self.rfid_id = "user1"
-        self.stacked_widget.authenticated_user = self.rfid_id  # 가상의 RFID ID
-        self.verify_user()
-
-    def verify_user(self):
-        """ 인증한 사용자와 `/human_to_meet` 토픽의 ID 비교 """
-        if received_user_id and self.stacked_widget.authenticated_user == received_user_id:
-            QMessageBox.information(self, "✅ 인증 성공", "사용자 인증이 완료되었습니다!")
-            self.stacked_widget.setCurrentIndex(3)  # ArrivedScreen으로 이동
+    def handle_auth_result(self, result):
+        """RFID 인증 결과를 받아 화면을 변경"""
+        if result == "succeeded":
+            self.stacked_widget.setCurrentIndex(3)  # 인증 성공 시 화면 3으로 전환
         else:
             QMessageBox.warning(self, "❌ 인증 실패", "RFID ID가 일치하지 않습니다.")
+            self.stacked_widget.setCurrentIndex(1)  # 인증 실패 시 이전 화면으로
 
 
 class LoginScreen(QWidget):
@@ -136,9 +147,11 @@ class LoginScreen(QWidget):
             QMessageBox.information(self, "Login Success", "Authentication Complete!")
             if received_user_id and user_id == received_user_id:
                 QMessageBox.information(self, "✅ 인증 성공", "사용자 인증이 완료되었습니다!")
+                gui_login_result_pub.publish("succeeded")
                 self.stacked_widget.authenticated_user = user_id
                 self.stacked_widget.setCurrentIndex(3)  # ArrivedScreen으로 이동
             else:
+                gui_login_result_pub.publish("failed")
                 QMessageBox.warning(self, "❌ 인증 실패", "ID가 일치하지 않습니다.")
         else:
             QMessageBox.warning(self, "Login Failed", "Invalid ID or Password.")
@@ -215,7 +228,10 @@ if __name__ == "__main__":
     stacked_widget.authenticated_user = None  # 인증된 사용자 저장
 
     is_interacting_with_human_done_pub = rospy.Publisher('/is_interacting_with_human', String, queue_size = 10)
+    rfid_auth_request_pub = rospy.Publisher('/rfid_auth_request', String, queue_size = 10)
+    gui_login_result_pub = rospy.Publisher('/gui_login_result', String, queue_size = 10)
     human_to_meet_sub = rospy.Subscriber('/human_to_meet', String, human_to_meet_callback)
+    
 
     stacked_widget.addWidget(SelectMethodScreen(stacked_widget))  # Screen 1
     stacked_widget.addWidget(RFIDScreen(stacked_widget))  # Screen 2-1

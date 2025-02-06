@@ -1,5 +1,6 @@
-//웹소켓 등록록
-var socket = io("https://172.20.10.14:5000",{transports:['websocket'],withCredentials:true});
+var ROS_HOST_IP = '192.168.0.3'
+//웹소켓 등록
+var socket = io(`https://${ROS_HOST_IP}:5000`,{transports:['websocket'],withCredentials:true});
 console.log("JS시작!!!!!!!!!!!!!!")
 // 바깥 클릭 시 모달 닫기
 window.onclick = function(event) {
@@ -71,10 +72,10 @@ socket.on("web_push", function(data) {
     }
 });
 
-//로봇 위치 정보 그리기(ROSBridge + )
+//로봇 위치 정보 그리기(ROSBridge + HTML canvas )
 document.addEventListener("DOMContentLoaded", function () {
     var ros = new ROSLIB.Ros({
-        url: 'ws://localhost:9090' // ROSBridge 웹소켓 주소
+        url: `wss://${ROS_HOST_IP}:9090` // ROSBridge 웹소켓 주소
     });
 
     ros.on('connection', function () {

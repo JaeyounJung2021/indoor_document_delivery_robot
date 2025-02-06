@@ -130,31 +130,77 @@ document.addEventListener("DOMContentLoaded", function () {
         goalPosition = { x, y };
         drawCanvas();
     });
+   // 🟡 맵 데이터 구독 (OccupancyGrid)
+   var mapListener = new ROSLIB.Topic({
+        ros: ros,
+        name: '/map',
+        messageType: 'nav_msgs/OccupancyGrid'
+});
 
+    var mapData = null;
+
+    mapListener.subscribe(function (message) {
+        mapData = message;
+        drawCanvas();
+});
     function drawCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height); //내부 정보를 다 지움. BUT 밑에서 계속 그려주니까 사실상 애니메이션처럼 계속 그려주는거임.
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 내부 정보를 다 지움. BUT 밑에서 계속 그려주니까 사실상 애니메이션처럼 계속 그려주는 거임.
+
+        // 🟡 맵 그리기
+        if (mapData) {
+            var mapWidth = mapData.info.width;
+            var mapHeight = mapData.info.height;
+            var resolution = mapData.info.resolution;
+            var originX = mapData.info.origin.position.x;
+            var originY = mapData.info.origin.position.y;
+
+            // 맵 그리기 (OccupancyGrid)
+            for (var i = 0; i < mapWidth; i++) {
+                for (var j = 0; j < mapHeight; j++) {
+                    var value = mapData.data[j * mapWidth + i]; // 맵 데이터에서 값 추출
+
+                    // 장애물 표시 (값이 100일 경우)
+                    if (value === 100) {
+                        ctx.fillStyle = "black"; // 장애물은 검은색
+                    }
+                    // 빈 공간 (값이 0일 경우)
+                    else if (value === 0) {
+                        ctx.fillStyle = "white"; // 빈 공간은 흰색
+                    }
+                    // 알 수 없음 (값이 -1일 경우)
+                    else {
+                        ctx.fillStyle = "gray"; // 알 수 없는 공간은 회색
+                    }
+
+                    var x = (i * resolution + originX) * scale + canvas.width / 2;
+                    var y = -(j * resolution + originY) * scale + canvas.height / 2;
+
+                    ctx.fillRect(x, y, scale, scale); // 각 셀을 그립니다
+                }
+            }
+        }
 
         // 🔴 목표 위치 그리기 (빨간색 원)
         if (goalPosition) {
             ctx.fillStyle = "red";
-            ctx.beginPath(); //이전에 그렸던 그림에서 벗어나서 새로운 그림 그리기
+            ctx.beginPath();
             ctx.arc(goalPosition.x, goalPosition.y, 5, 0, 2 * Math.PI);
-            ctx.fill(); //fill로 채우고 있기 때문에 stroke 필요없음.
+            ctx.fill();
         }
 
         // 🟢 로봇 경로 그리기 (녹색 선)
         ctx.strokeStyle = "green";
         ctx.lineWidth = 2;
-        ctx.beginPath(); //이전에 그렸던 그림에서 벗어나서 새로운 그림 그리기
+        ctx.beginPath();
         for (var i = 0; i < robotPath.length; i++) {
             var pos = robotPath[i];
             if (i === 0) {
-                ctx.moveTo(pos.x, pos.y); //처음 i===0일때는 펜을 들어서 시작지점으로 펜을 이동
+                ctx.moveTo(pos.x, pos.y);
             } else {
-                ctx.lineTo(pos.x, pos.y); // 현재 좌표에서 넣어준 인자의 좌표로 선을 그려주는 부분. 그리기 + 펜좌표도 옮겨줌.
+                ctx.lineTo(pos.x, pos.y);
             }
         }
-        ctx.stroke(); //line to 는 경로 정의만 해두고. 실제 HTML 캔버스에 그려주는놈은 얘임.
+        ctx.stroke();
 
         // 🔵 로봇 현재 위치 표시 (파란색 원)
         if (robotPath.length > 0) {
@@ -162,7 +208,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ctx.fillStyle = "blue";
             ctx.beginPath();
             ctx.arc(lastPos.x, lastPos.y, 5, 0, 2 * Math.PI);
-            ctx.fill(); // fill 로 채우고 있기때문에 stroke 필요없음.
+            ctx.fill();
         }
     }
 });

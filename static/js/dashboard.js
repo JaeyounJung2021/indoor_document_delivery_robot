@@ -41,70 +41,8 @@ function closeRegisterModal() {
     document.getElementById("registerModal").style.display = "none";
 }
 
-/* 아 시발 진짜 아래 구현도 안된코드 실행 하다가 DOM 로드 안되서 서비스 워커 실행 안된거였네 시발 진짜 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
-// 캔버스 설정
-var canvas = document.getElementById("robotCanvas");
-var ctx = canvas.getContext("2d");
 
-// 맵 이미지 로드
-var mapImage = new Image();
-mapImage.src = '/static/images/map.png';  // 로컬 이미지 경로 (웹 서버의 정적 파일 경로)
-
-// 로봇 경로 히스토리
-var pathHistory = [];
-
-// ROS WebSocket 서버 연결
-var ros = new ROSLIB.Ros({
-    url: 'ws://<ROS_SERVER_IP>:9090'  // ROS WebSocket 서버 주소
-});
-
-// 위치 데이터를 받을 토픽 설정
-var listener = new ROSLIB.Topic({
-    ros: ros,
-    name: '/amcl_pose',  // ROS 토픽 이름
-    messageType: 'geometry_msgs/PoseWithCovarianceStamped'  // 메시지 타입
-});
-
-// 위치 데이터 구독
-listener.subscribe(function(message) {
-    updatePath(message);  // 로봇 위치 데이터로 경로 업데이트
-});
-
-// 경로 업데이트 함수
-function updatePath(message) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);  // 이전 경로 지우기
-
-    // 맵을 다시 그리기 (경로가 그려지기 전에 매번 맵을 그리기)
-    ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
-
-    // 현재 경로 그리기
-    ctx.beginPath();
-    ctx.moveTo(message.pose.position.x * 50, message.pose.position.y * 50);  // 시작점
-
-    // 경로 그리기
-    pathHistory.forEach(function(pathPoint) {
-        ctx.lineTo(pathPoint.x * 50, pathPoint.y * 50);
-    });
-
-    ctx.strokeStyle = "blue";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // 새 경로 추가 (pathHistory에 추가)
-    pathHistory.push({
-        x: message.pose.position.x,
-        y: message.pose.position.y
-    });
-
-    // 오래된 경로 삭제 (최대 5개 경로까지만 유지)
-    if (pathHistory.length > 5) {
-        pathHistory.shift();
-    }
-}
-*/
 //수령인, 호출인 웹푸시 알림 구현 부분(웹 푸쉬 알림)
-
-
 // 버튼 클릭 시 알림 권한 요청, 브라우저따라 무조건 사용자랑 상호작용이 있어야만 권한허용 할 수 있는 경우가 있어서....
 document.getElementById("requestPermissionButton").addEventListener('click', function() {
     Notification.requestPermission().then(function(permission) {
@@ -130,5 +68,101 @@ socket.on("web_push", function(data) {
         console.log("웹 푸시 알림을 표시했습니다:", data);
     } else {
         console.log("알림 권한이 거부되어 알림을 표시할 수 없습니다.");
+    }
+});
+
+//로봇 위치 정보 그리기(ROSBridge + )
+document.addEventListener("DOMContentLoaded", function () {
+    var ros = new ROSLIB.Ros({
+        url: 'ws://localhost:9090' // ROSBridge 웹소켓 주소
+    });
+
+    ros.on('connection', function () {
+        console.log('✅ Connected to ROSBridge WebSocket');
+    });
+
+    ros.on('error', function (error) {
+        console.error('❌ Error connecting to ROS:', error);
+    });
+
+    ros.on('close', function () {
+        console.log('🔌 Disconnected from ROS');
+    });
+
+    var canvas = document.getElementById("robotCanvas");
+    var ctx = canvas.getContext("2d"); //canvas에 2d 그림 그리는 객체
+
+    var robotPath = []; // 로봇 이동 경로 저장
+    var goalPosition = null; // 목표 위치 저장
+    var scale = 50; // 좌표를 캔버스 크기로 변환하는 스케일 조정
+
+    // 🟢 로봇 위치(odom) 구독
+    var odomListener = new ROSLIB.Topic({
+        ros: ros,
+        name: '/odom',
+        messageType: 'nav_msgs/Odometry'
+    });
+
+    odomListener.subscribe(function (message) {
+        var x = message.pose.pose.position.x * scale + canvas.width / 2;
+        var y = -message.pose.pose.position.y * scale + canvas.height / 2; // Y 좌표 반전(HTML5 canvas는 아래로 증가가)
+
+        robotPath.push({ x, y });
+
+        if (robotPath.length > 100) {
+            robotPath.shift(); // 너무 많은 점을 저장하지 않도록 제한
+        }
+
+        drawCanvas();
+    });
+
+    // 🟢 목표 위치(goal) 구독
+    var goalListener = new ROSLIB.Topic({
+        ros: ros,
+        name: '/move_base_simple/goal',
+        messageType: 'geometry_msgs/PoseStamped'
+    });
+
+    goalListener.subscribe(function (message) {
+        var x = message.pose.position.x * scale + canvas.width / 2;
+        var y = -message.pose.position.y * scale + canvas.height / 2;
+
+        goalPosition = { x, y };
+        drawCanvas();
+    });
+
+    function drawCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 🔴 목표 위치 그리기 (빨간색 원)
+        if (goalPosition) {
+            ctx.fillStyle = "red";
+            ctx.beginPath();
+            ctx.arc(goalPosition.x, goalPosition.y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // 🟢 로봇 경로 그리기 (녹색 선)
+        ctx.strokeStyle = "green";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var i = 0; i < robotPath.length; i++) {
+            var pos = robotPath[i];
+            if (i === 0) {
+                ctx.moveTo(pos.x, pos.y);
+            } else {
+                ctx.lineTo(pos.x, pos.y);
+            }
+        }
+        ctx.stroke();
+
+        // 🔵 로봇 현재 위치 표시 (파란색 원)
+        if (robotPath.length > 0) {
+            var lastPos = robotPath[robotPath.length - 1];
+            ctx.fillStyle = "blue";
+            ctx.beginPath();
+            ctx.arc(lastPos.x, lastPos.y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
     }
 });

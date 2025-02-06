@@ -1,4 +1,5 @@
 var ROS_HOST_IP = '192.168.0.3'
+var offset = 1 //웹 좌표계랑 rviz좌표계 달라서 위로 조금 치우치는 현상 발생. 맵 그릴때 y 1 만큼 올려주니 해결. 이거 그냥 노가다로 해결해야된데.
 //웹소켓 등록
 var socket = io(`https://${ROS_HOST_IP}:5000`,{transports:['websocket'],withCredentials:true});
 console.log("JS시작!!!!!!!!!!!!!!")
@@ -125,7 +126,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     goalListener.subscribe(function (message) {
         var x = -message.pose.position.y * scale + canvas.width / 2;
-        var y = -message.pose.position.x * scale + canvas.height / 2;
+        var y = -message.pose.position.x * scale + canvas.height / 2 ;
 
         goalPosition = { x, y };
         drawCanvas();
@@ -152,7 +153,7 @@ document.addEventListener("DOMContentLoaded", function () {
             var mapHeight = mapData.info.height;
             var resolution = mapData.info.resolution;
             var originX = mapData.info.origin.position.x;
-            var originY = mapData.info.origin.position.y;
+            var originY = mapData.info.origin.position.y +offset;
 
             // 맵 그리기 (OccupancyGrid)
             for (var i = 0; i < mapWidth; i++) {

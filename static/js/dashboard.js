@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     odomListener.subscribe(function (message) {
         var x = message.pose.pose.position.x * scale + canvas.width / 2;
-        var y = -message.pose.pose.position.y * scale + canvas.height / 2; // Y 좌표 반전(HTML5 canvas는 아래로 증가가)
+        var y = -message.pose.pose.position.y * scale + canvas.height / 2; // Y 좌표 반전(HTML5 canvas는 아래로 증가)
 
         robotPath.push({ x, y });
 
@@ -132,29 +132,29 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     function drawCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height); //내부 정보를 다 지움. BUT 밑에서 계속 그려주니까 사실상 애니메이션처럼 계속 그려주는거임.
 
         // 🔴 목표 위치 그리기 (빨간색 원)
         if (goalPosition) {
             ctx.fillStyle = "red";
-            ctx.beginPath();
+            ctx.beginPath(); //이전에 그렸던 그림에서 벗어나서 새로운 그림 그리기
             ctx.arc(goalPosition.x, goalPosition.y, 5, 0, 2 * Math.PI);
-            ctx.fill();
+            ctx.fill(); //fill로 채우고 있기 때문에 stroke 필요없음.
         }
 
         // 🟢 로봇 경로 그리기 (녹색 선)
         ctx.strokeStyle = "green";
         ctx.lineWidth = 2;
-        ctx.beginPath();
+        ctx.beginPath(); //이전에 그렸던 그림에서 벗어나서 새로운 그림 그리기
         for (var i = 0; i < robotPath.length; i++) {
             var pos = robotPath[i];
             if (i === 0) {
-                ctx.moveTo(pos.x, pos.y);
+                ctx.moveTo(pos.x, pos.y); //처음 i===0일때는 펜을 들어서 시작지점으로 펜을 이동
             } else {
-                ctx.lineTo(pos.x, pos.y);
+                ctx.lineTo(pos.x, pos.y); // 현재 좌표에서 넣어준 인자의 좌표로 선을 그려주는 부분. 그리기 + 펜좌표도 옮겨줌.
             }
         }
-        ctx.stroke();
+        ctx.stroke(); //line to 는 경로 정의만 해두고. 실제 HTML 캔버스에 그려주는놈은 얘임.
 
         // 🔵 로봇 현재 위치 표시 (파란색 원)
         if (robotPath.length > 0) {
@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ctx.fillStyle = "blue";
             ctx.beginPath();
             ctx.arc(lastPos.x, lastPos.y, 5, 0, 2 * Math.PI);
-            ctx.fill();
+            ctx.fill(); // fill 로 채우고 있기때문에 stroke 필요없음.
         }
     }
 });

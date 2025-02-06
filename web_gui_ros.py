@@ -45,6 +45,28 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row  # 열 이름을 키로 사용하는 딕셔너리 형태로 반환
     return conn
 
+# 특정 두 사용자의 UID 값을 가져오는 함수
+def get_uids_from_db():
+    caller_id = session['user_id']  # 현재 사용자
+    recipient_id = target_user_id   # 만날 사람
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 두 사용자의 UID 가져오기
+    cursor.execute("SELECT name, uid FROM employees WHERE name IN (?, ?)", (caller_id, recipient_id))
+    rows = cursor.fetchall()
+    
+    conn.close()
+
+    # 결과를 매핑하여 저장
+    uid_dict = {row["name"]: row["uid"] for row in rows}
+    
+    uid_caller = uid_dict.get(caller_id, None)  # caller_id의 UID
+    uid_recipient = uid_dict.get(recipient_id, None)  # recipient_id의 UID
+
+    return uid_caller, uid_recipient
+
 # 기본 경로
 @app.route('/')
 def home():
@@ -147,10 +169,12 @@ def recipient_info():
         if not caller_dept_info:
             return "Caller department not found", 404
 
+        uid_caller , uid_recipient = get_uids_from_db()
+        
         caller_coord = f"{caller_dept_info['pos_x']},{caller_dept_info['pos_y']},{caller_dept_info['ori_z']},{caller_dept_info['ori_w']}"
 
         # Delivery 객체 정보 생성
-        delivery_info = f"{user['name']},{user['department']},{caller_coord},{user_id},{recipient_name},{recipient_dept},{recipient_coord_str},{recipient_id}"
+        delivery_info = f"{user['name']},{user['department']},{caller_coord},{user_id},{recipient_name},{recipient_dept},{recipient_coord_str},{recipient_id},{uid_caller},{uid_recipient}"
 
         # 로그로 delivery_info 출력
         logging.info(f"Delivery Information: {delivery_info}")

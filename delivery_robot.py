@@ -14,11 +14,11 @@ import actionlib_msgs.msg
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
-    #':' 는 '타입 힌트'라는 파이썬 문법으로, '이 매개변수로 들어와야하는 데이터의 타입이 ~여야함' 을 알려줌
     def __init__(self, caller_name: str, caller_dept: str, 
                  caller_coord: Tuple[float, float, float, float], caller_id: str,
                  recipient_name: str, recipient_dept: str, 
-                 recipient_coord: Tuple[float, float, float, float], recipient_id: str):
+                 recipient_coord: Tuple[float, float, float, float], recipient_id: str,
+                 caller_rfid_uid: str = "", recipient_rfid_uid: str = ""):
         self.caller_name = caller_name
         self.caller_dept = caller_dept
         self.caller_coord = caller_coord
@@ -28,6 +28,8 @@ class Delivery:
         self.recipient_coord = recipient_coord
         self.recipient_id = recipient_id
         self.picked_up = False
+        self.caller_rfid_uid = caller_rfid_uid
+        self.recipient_rfid_uid = recipient_rfid_uid
         
     
     #'->' 는 '타입 힌트'라는 파이썬 문법으로, 이 함수가 반환하는 데이터의 타입이 str임을 알려줌
@@ -127,8 +129,8 @@ class DeliveryRobot:
         rospy.loginfo("새로운 배송 요청이 들어왔고, call_request_callback이 호출되었습니다.")
         try:
             data = msg.data.split(",")
-            if len(data) != 14:
-                rospy.logerr(f"잘못된 배송 정보 형식입니다. {len(data)}개 값이 전달됨, 14개 필요")
+            if len(data) != 16:
+                rospy.logerr(f"잘못된 배송 정보 형식입니다. {len(data)}개 값이 전달됨, 16개 필요")
                 return
 
             try:
@@ -141,7 +143,8 @@ class DeliveryRobot:
             if len(self.deliveries) < 2:
                 new_delivery = Delivery(
                     data[0], data[1], caller_coord, data[6],
-                    data[7], data[8], recipient_coord, data[13]
+                    data[7], data[8], recipient_coord, data[13],
+                    data[14], data[15]  # 추가된 RFID UID
                 )
                 self.deliveries.append(new_delivery)
                 rospy.loginfo(f"새로운 배송이 추가되었습니다: {new_delivery}")
@@ -272,11 +275,11 @@ class DeliveryRobot:
                 self.current_point_type = point_type
                 
                 if point_type == "caller":
-                    self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type}")
-                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.caller_id},{point_type} 보냈습니다" )
+                    self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type},{delivery.caller_rfid_uid}")
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.caller_id},{point_type},{delivery.caller_rfid_uid} 보냈습니다" )
                 else:  # recipient
-                    self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type}")
-                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.recipient_id},{point_type} 보냈습니다" )
+                    self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type},{delivery.recipient_rfid_uid}")
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.recipient_id},{point_type},{delivery.recipient_rfid_uid} 보냈습니다" )
                 
                 self.event.clear()
                 self.event.wait()

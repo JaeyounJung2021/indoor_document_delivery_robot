@@ -14,11 +14,11 @@ import actionlib_msgs.msg
 
 class Delivery:
     """배송 정보를 관리하는 클래스"""
-    #':' 는 '타입 힌트'라는 파이썬 문법으로, '이 매개변수로 들어와야하는 데이터의 타입이 ~여야함' 을 알려줌
     def __init__(self, caller_name: str, caller_dept: str, 
                  caller_coord: Tuple[float, float, float, float], caller_id: str,
                  recipient_name: str, recipient_dept: str, 
-                 recipient_coord: Tuple[float, float, float, float], recipient_id: str):
+                 recipient_coord: Tuple[float, float, float, float], recipient_id: str,
+                 caller_rfid_uid: str = "", recipient_rfid_uid: str = ""):
         self.caller_name = caller_name
         self.caller_dept = caller_dept
         self.caller_coord = caller_coord
@@ -28,6 +28,9 @@ class Delivery:
         self.recipient_coord = recipient_coord
         self.recipient_id = recipient_id
         self.picked_up = False
+        self.caller_rfid_uid = caller_rfid_uid
+        self.recipient_rfid_uid = recipient_rfid_uid
+        
     
     #'->' 는 '타입 힌트'라는 파이썬 문법으로, 이 함수가 반환하는 데이터의 타입이 str임을 알려줌
     #객체 생성될때 자동으로 호출됨
@@ -61,11 +64,14 @@ class DeliveryRobot:
         self.waiting_for_interaction = False
         # 대기 중에 들어온 새로운 요청을 표시하는 플래그
         self.has_pending_requests = False
+        # 오늘의 배송 완료 건수 (누적) 나타내는 변수
+        self.today_delivery = 0
         self.event = threading.Event()
         
         # 액션 클라이언트 설정
         self._setup_action_client()
         rospy.loginfo("배송 로봇이 초기화되어 호출을 기다리고 있습니다.")
+
 
     #"""퍼블리셔 초기화 메서드"""
     def _init_publishers(self):
@@ -73,7 +79,7 @@ class DeliveryRobot:
         try:
             self.pub_goal = rospy.Publisher("/move_base_simple/goal", PoseStamped, queue_size=10)
             self.esp_command_pub = rospy.Publisher("/esp8266_command", String, queue_size=10)
-            self.human_to_meet_pub = rospy.Publisher("/human_to_meet", String, queue_size=10)
+            self.human_to_meet_pub = rospy.Publisher("/human_to_meet", String, latch = True, queue_size=10)
         except Exception as e:
             rospy.logerr(f"퍼블리셔 초기화 실패: {e}")
             raise
@@ -123,8 +129,8 @@ class DeliveryRobot:
         rospy.loginfo("새로운 배송 요청이 들어왔고, call_request_callback이 호출되었습니다.")
         try:
             data = msg.data.split(",")
-            if len(data) != 14:
-                rospy.logerr(f"잘못된 배송 정보 형식입니다. {len(data)}개 값이 전달됨, 14개 필요")
+            if len(data) != 16:
+                rospy.logerr(f"잘못된 배송 정보 형식입니다. {len(data)}개 값이 전달됨, 16개 필요")
                 return
 
             try:
@@ -137,7 +143,8 @@ class DeliveryRobot:
             if len(self.deliveries) < 2:
                 new_delivery = Delivery(
                     data[0], data[1], caller_coord, data[6],
-                    data[7], data[8], recipient_coord, data[13]
+                    data[7], data[8], recipient_coord, data[13],
+                    data[14], data[15]  # 추가된 RFID UID
                 )
                 self.deliveries.append(new_delivery)
                 rospy.loginfo(f"새로운 배송이 추가되었습니다: {new_delivery}")
@@ -192,7 +199,7 @@ class DeliveryRobot:
         
         # 서브스레드가 execute_route()를 지금 실행중이라면 액션 서버와 통신하여 기존의 서브스레드에 의한 goal 취소함
         if self.executing_route:
-            rospy.loginfo("현재 경로를 취소하고 새로운 경로로 변경합니다.")
+            rospy.loginfo(f"현재 경로를 취소하고, 재계산된 새로운 최적 경로로 변경합니다.현재 남은 배달 건수: {len(self.deliveries)}")
             ##기존의 목표 좌표 취소
             self.move_base_client.cancel_all_goals()
             #서브스레드가 죽을 타이밍이라고 설정
@@ -257,27 +264,26 @@ class DeliveryRobot:
         try:
             for coord, point_type, delivery in route:
                 if self.route_thread_flag:
-                    rospy.loginfo("새로운 배송 요청으로 인해 현재 경로가 취소되었습니다")
-                    # 서브스레드 자살
                     rospy.loginfo("서브스레드가 죽습니다,,,")
                     break
 
                 rospy.loginfo(f"{point_type} 위치로 이동 중: {coord}")
                 self.move_command(*coord)
                 
-                # Publish the ID and point type of the person we're heading to
+                # 현재 이동 중인 특정 배송 정보 저장
+                self.current_delivery = delivery
+                self.current_point_type = point_type
+                
                 if point_type == "caller":
-                    self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type}")
-                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.caller_id},{point_type} 보냈습니다" )
+                    self.human_to_meet_pub.publish(f"{delivery.caller_id},{point_type},{delivery.caller_rfid_uid}")
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.caller_id},{point_type},{delivery.caller_rfid_uid} 보냈습니다" )
                 else:  # recipient
-                    self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type}")
-                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.recipient_id},{point_type} 보냈습니다" )
+                    self.human_to_meet_pub.publish(f"{delivery.recipient_id},{point_type},{delivery.recipient_rfid_uid}")
+                    rospy.loginfo(f"human_to_meet 토픽으로 {delivery.recipient_id},{point_type},{delivery.recipient_rfid_uid} 보냈습니다" )
                 
                 self.event.clear()
-                # event가 set 될때까지 서브스레드 대기 (gui,mcu와 사람의 대면 상호 작용이 끝날때까지 서브스레드 동작을 중지시키기 위해)
-                rospy.loginfo("로봇이 출발합니다,,,,,,")
                 self.event.wait()
-                    
+            rospy.loginfo("경로 실행 서브스레드가 죽습니다,,,,,,")
                     
         except Exception as e:
             rospy.logerr(f"경로 실행 중 오류 발생: {e}")
@@ -297,6 +303,7 @@ class DeliveryRobot:
         
         self.pub_goal.publish(goal)
         rospy.loginfo(f"이동 목표가 설정되었습니다: ({pos_x}, {pos_y})")
+        rospy.loginfo("로봇이 이동을 시작합니다,,,")
 
     # 이 콜백은 도착 정보에대한 로그만 남김
     def result_callback(self, result: MoveBaseActionResult) -> None:
@@ -305,52 +312,55 @@ class DeliveryRobot:
             rospy.loginfo("목표 지점 도달 성공")
             self.waiting_for_interaction = True
             self.perform_action_at_destination()
-        '''elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
+        elif result.status.status in [actionlib_msgs.msg.GoalStatus.ABORTED, 
                                     actionlib_msgs.msg.GoalStatus.REJECTED]:
             rospy.logwarn("목표 도달 실패")
-            self._handle_goal_aborted()'''
+            self._handle_goal_aborted()
 
-    #"""실패한 네비게이션 처리"""
+    
     def _handle_goal_aborted(self) -> None:
         
         retry_count = getattr(self, '_retry_count', 0)
-        if retry_count < 3:
+        if retry_count < 10:
             self._retry_count = retry_count + 1
-            rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/3)")
+            rospy.logwarn(f"네비게이션 재시도 중 (시도 {self._retry_count}/10)")
             self.move_command(*self.current_goal.pose.position)
         else:
-            rospy.logerr("3회 시도 후 네비게이션 실패,,,,,,관리자에게 연락합니다")
+            rospy.logerr("10회 시도 후 네비게이션 실패,,,,,,관리자에게 연락합니다")
             self._retry_count = 0
             
 
     def is_interacting_with_human_callback(self, msg: String) -> None:
         """사용자 상호작용 완료 처리"""
         if msg.data == "done" and self.waiting_for_interaction:
-            # 현재 위치가 호출자 위치와 가까운지 확인
-            for delivery in self.deliveries[:]:
-                if self._is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
+            # 현재 이동 중이었던 특정 배송 객체로 처리
+            if hasattr(self, 'current_delivery'):
+                delivery = self.current_delivery
+                
+                # 호출자와의 상호작용 (물건 픽업)
+                if self.current_point_type == "caller" and not delivery.picked_up:
                     rospy.loginfo(f"{delivery.caller_name}님이 로봇에 물건을 성공적으로 적재하였습니다!")
                     delivery.picked_up = True
-                elif self._is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
+                
+                # 수령자와의 상호작용 (물건 전달)
+                elif self.current_point_type == "recipient" and delivery.picked_up:
                     rospy.loginfo(f"{delivery.recipient_name}님이 로봇에 성공적으로 물건을 수령하였습니다!")
-                    rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}의 {delivery.caller_name}님에서 [ID:{delivery.recipient_id}] {delivery.recipient_dept}의 {delivery.recipient_name}님으로의 배송이 성공적으로 완료되었습니다!")
+                    rospy.loginfo(f"[ID:{delivery.caller_id}] {delivery.caller_dept}부서의 {delivery.caller_name}님에서 "
+                                f"[ID:{delivery.recipient_id}] {delivery.recipient_dept}부서의 {delivery.recipient_name}님으로의 "
+                                "배송이 성공적으로 완료되었습니다!")
                     self.deliveries.remove(delivery)
-                    rospy.loginfo("완료된 배송을 지웠습니다,,,")
+                    self.today_delivery += 1
+                    rospy.loginfo(f"오늘의 배송 완료 건수: {self.today_delivery}건")
 
-            # 상호작용 대기 상태 해제
+            # 이후 로직은 기존과 동일
             self.waiting_for_interaction = False
-            rospy.loginfo("로봇과 사용자의 대면 상호작용이 끝났습니다!")
-
-
-            # 대기 중에 들어온 요청이 있었다면 사용자와의 상호작용 결과를 반영해서 경로 재계산
             if self.has_pending_requests:
                 rospy.loginfo("대기 중 들어온 요청에 대한 경로를 계산합니다.")
-
                 self.recalculate_route()
                 self.has_pending_requests = False
             else:
                 self.event.set()
-            #대기중에 들어온 요청이 없다면 execute_route() 실행하던 스레드에게 동작 재개 신호 보냄
+        rospy.loginfo("로봇과 사용자의 대면 상호작용이 끝났습니다!")
 
 
     def _is_close(self, pos1, pos2, threshold=2):
@@ -360,11 +370,15 @@ class DeliveryRobot:
 
     def perform_action_at_destination(self):
         """목적지 도착 시 수행할 작업"""
-        for delivery in self.deliveries[:]:  # 복사본으로 순회하여 안전하게 제거
-            if self._is_close(self.current_position, delivery.caller_coord) and not delivery.picked_up:
+        rospy.loginfo("")
+        if hasattr(self, 'current_delivery'):
+            delivery = self.current_delivery
+            if self.current_point_type == "caller" and not delivery.picked_up:
                 rospy.loginfo(f"{delivery.caller_name}님의 위치에 도착했습니다. 호출자의 물건 적재를 대기합니다.")
-            elif self._is_close(self.current_position, delivery.recipient_coord) and delivery.picked_up:
+            
+            elif self.current_point_type == "recipient" and delivery.picked_up:
                 rospy.loginfo(f"{delivery.recipient_name}님의 위치에 도착했습니다. 수령자의 물건 수령을 대기합니다.")
+                
 
 
     def run(self):

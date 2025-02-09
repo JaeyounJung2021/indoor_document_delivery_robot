@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 
 import sqlite3
 import matplotlib.pyplot as plt
@@ -26,13 +26,14 @@ def initialize_database():
     cursor.execute('''DROP TABLE IF EXISTS departments''')
     cursor.execute('''DROP TABLE IF EXISTS employee_with_coordinates''')  # 새로운 테이블 삭제
 
-    # 직원 테이블 생성 (id와 password 추가)
+    # 직원 테이블 생성 (id와 password, uid 포함)
     cursor.execute(''' 
         CREATE TABLE IF NOT EXISTS employees (
             id TEXT PRIMARY KEY,
             password TEXT NOT NULL,
             name TEXT NOT NULL,
-            department TEXT NOT NULL
+            department TEXT NOT NULL,
+            uid TEXT NOT NULL  -- RFID 태그를 위한 컬럼 추가
         )
     ''')
 
@@ -55,23 +56,24 @@ def initialize_database():
             pos_x REAL NOT NULL,
             pos_y REAL NOT NULL,
             ori_z REAL NOT NULL,
-            ori_w REAL NOT NULL
+            ori_w REAL NOT NULL,
+            uid TEXT NOT NULL  -- RFID 태그를 포함한 컬럼 추가
         )
     ''')
 
-    # 직원 데이터 삽입 (id와 password 포함, 평문 비밀번호 저장)
+    # 직원 데이터 삽입 (id, password, uid 포함)
     employees = [
-        ('user1', 'password1', 'jaeyun', 'Developing'),
-        ('user2', 'password2', 'seokkwon', 'Developing'),
-        ('user3', 'password3', 'kyungbin', 'Marketing'),
-        ('user4', 'password4', 'doyun', 'R&D'),
-        ('user5', 'password5', 'seoyun', 'R&D'),
-        ('user6', 'password6', 'dajeong', 'R&D')
+        ('user1', 'password1', 'jaeyun', 'Developing', '1A 1A 1A 1A'),
+        ('user2', 'password2', 'seokkwon', 'Developing', '2B 2B 2B 2B'),
+        ('user3', 'password3', 'kyungbin', 'Marketing', '3C 3C 3C 3C'),
+        ('user4', 'password4', 'doyun', 'R&D', '4D 4D 4D 4D'),
+        ('user5', 'password5', 'seoyun', 'R&D', '5E 5E 5E 5E'),
+        ('user6', 'password6', 'dajeong', 'R&D', '6F 6F 6F 6F')
     ]
 
     cursor.executemany('''
-        INSERT OR IGNORE INTO employees (id, password, name, department)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO employees (id, password, name, department, uid)
+        VALUES (?, ?, ?, ?, ?)
     ''', employees)
 
     # 부서 데이터 삽입
@@ -88,8 +90,8 @@ def initialize_database():
 
     # 직원-부서-좌표 정보를 결합하여 employee_with_coordinates 테이블에 삽입
     cursor.execute('''
-        INSERT OR IGNORE INTO employee_with_coordinates (name, department, pos_x, pos_y, ori_z, ori_w)
-        SELECT e.name, e.department, d.pos_x, d.pos_y, d.ori_z, d.ori_w
+        INSERT OR IGNORE INTO employee_with_coordinates (name, department, pos_x, pos_y, ori_z, ori_w, uid)
+        SELECT e.name, e.department, d.pos_x, d.pos_y, d.ori_z, d.ori_w, e.uid
         FROM employees e
         JOIN departments d ON e.department = d.department
     ''')
@@ -105,7 +107,7 @@ def display_database():
     """
     conn = sqlite3.connect(DB_PATH)
 
-    # 직원 데이터 조회 (id와 password 포함)
+    # 직원 데이터 조회 (id, password, uid 포함)
     employees_df = pd.read_sql_query("SELECT * FROM employees", conn)
 
     # 부서 데이터 조회
@@ -113,7 +115,7 @@ def display_database():
 
     # 직원-부서-좌표 데이터를 조회
     employee_with_coordinates_df = pd.read_sql_query('''
-        SELECT e.id, e.password, e.name, e.department, d.pos_x, d.pos_y, d.ori_z, d.ori_w
+        SELECT e.id, e.password, e.name, e.department, d.pos_x, d.pos_y, d.ori_z, d.ori_w, e.uid
         FROM employees e
         JOIN departments d ON e.department = d.department
     ''', conn)

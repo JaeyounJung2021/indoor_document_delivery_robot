@@ -87,7 +87,7 @@ class RFIDScreen(QWidget):
         self.stacked_widget = stacked_widget
         self.initUI()
         
-        rfid_auth_request_pub.publish("RequestArrived") #ESP8266으로 RFID인증요청 토픽 전송
+        rfid_auth_request_pub.publish("RequestArrived") #ESP8266으로 RFID인증요청 토픽 전송 #추후에 esp8266 두개 컨트롤 되도록 하는 로직 추가 필요.
 
         # ROS Subscriber 시작
         self.subscriber_thread = ROSSubscriberThread()

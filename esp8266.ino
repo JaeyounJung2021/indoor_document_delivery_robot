@@ -33,24 +33,22 @@ void humanToMeetCallback(const std_msgs::String& msg) {
     int firstComma = data.indexOf(',');
     int secondComma = data.indexOf(',', firstComma + 1);
     
-    String pointType = data.substring(firstComma + 1, secondComma);
-    currentUID = data.substring(secondComma + 1);
-    isCallerMode = (pointType == "caller");
+    // 형식: "id,point_type,uid"
+    String userId = data.substring(0, firstComma);                     // ex: "user1"
+    String pointType = data.substring(firstComma + 1, secondComma);   // ex: "caller"
+    currentUID = data.substring(secondComma + 1);                     // ex: "1A 1A 1A 1A"
     
-    // LED 색상 설정
-    if(isCallerMode) {
-        setStripColor(0, 255, 0);  // 초록색
-    }
+    setStripColor(0, 0, 255);  // 이동중에는 LED 파란색으로 설정 
+
+    // 디버깅을 위한 시리얼 출력 (선택사항)
+    Serial.println("User ID: " + userId);
+    Serial.println("Point Type: " + pointType);
+    Serial.println("UID: " + currentUID);
 }
 
 void isInteractingCallback(const std_msgs::String& msg) {
     if(String(msg.data) == "done") {
-        if(isCallerMode) {
-            setStripColor(255, 0, 0);  // 빨간색
-        } else {
-            setStripColor(0, 255, 0);  // 초록색
-        }
-        lockDrawer();
+        setStripColor(0, 0, 255);  // LED 파란색으로 설정 
     }
 }
 
@@ -88,6 +86,8 @@ void rfidAuthRequestCallback(const std_msgs::String& msg) {
         // 10초 동안 인증 실패하거나 불일치한 경우
         if(!authSuccess) {
             rfid_result_msg.data = "failed";
+            // 빨간색 표시하기
+            setStripColor(255, 0, 0);
             rfid_result_pub.publish(&rfid_result_msg);
         }
     }

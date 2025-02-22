@@ -63,12 +63,12 @@ def initialize_database():
 
     # 직원 데이터 삽입 (id, password, uid 포함)
     employees = [
-        ('user1', 'password1', 'jaeyun', 'Developing', '1A 1A 1A 1A'),
-        ('user2', 'password2', 'seokkwon', 'Developing', '2B 2B 2B 2B'),
-        ('user3', 'password3', 'kyungbin', 'Marketing', '3C 3C 3C 3C'),
-        ('user4', 'password4', 'doyun', 'R&D', '4D 4D 4D 4D'),
-        ('user5', 'password5', 'seoyun', 'R&D', '5E 5E 5E 5E'),
-        ('user6', 'password6', 'dajeong', 'R&D', '6F 6F 6F 6F')
+        ('user1', 'password1', 'jaeyun', 'Developing', '1A1A1A1A'),
+        ('user2', 'password2', 'seokkwon', 'Developing', '2B2B2B2B'),
+        ('user3', 'password3', 'kyungbin', 'Marketing', '3C3C3C3C'),
+        ('user4', 'password4', 'doyun', 'R&D', '4D4D4D4D'),
+        ('user5', 'password5', 'seoyun', 'R&D', '5E5E5E5E'),
+        ('user6', 'password6', 'dajeong', 'R&D', '6F6F6F6F')
     ]
 
     cursor.executemany('''

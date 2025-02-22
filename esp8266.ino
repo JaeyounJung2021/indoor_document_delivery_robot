@@ -36,7 +36,7 @@ void humanToMeetCallback(const std_msgs::String& msg) {
     // 형식: "id,point_type,uid"
     String userId = data.substring(0, firstComma);                     // ex: "user1"
     String pointType = data.substring(firstComma + 1, secondComma);   // ex: "caller"
-    currentUID = data.substring(secondComma + 1);                     // ex: "1A 1A 1A 1A"
+    currentUID = data.substring(secondComma + 1);                     // ex: "1A1A1A1A"
     
     setStripColor(0, 0, 255);  // 이동중에는 LED 파란색으로 설정 
 
@@ -48,6 +48,7 @@ void humanToMeetCallback(const std_msgs::String& msg) {
 
 void isInteractingCallback(const std_msgs::String& msg) {
     if(String(msg.data) == "done") {
+        lockDrawer(); // lock
         setStripColor(0, 0, 255);  // LED 파란색으로 설정 
     }
 }
